@@ -1,6 +1,6 @@
 import * as THREE from "three"
 
-export type FormType = "ring" | "vessel"
+export type FormType = "ring" | "vessel" | "fin"
 
 export type SculptureParams = {
   form: FormType
@@ -154,6 +154,7 @@ function buildRing(p: SculptureParams): THREE.BufferGeometry {
   return geo
 }
 
+/** ring/vessel only — "fin" sculptures are built by lib/fin-sculpture.ts */
 export function buildSculpture(p: SculptureParams): THREE.BufferGeometry {
   return p.form === "ring" ? buildRing(p) : buildVessel(p)
 }
