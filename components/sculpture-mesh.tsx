@@ -40,11 +40,13 @@ export function SculptureMesh({
   playing,
   speed,
   dark,
+  detail,
 }: {
   params: SculptureParams
   playing: boolean
   speed: number
   dark: boolean
+  detail: number
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
   const lastBuild = useRef(0)
@@ -63,9 +65,9 @@ export function SculptureMesh({
   }
 
   useEffect(() => {
-    swap(buildSculpture(params))
+    swap(buildSculpture(params, detail))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params])
+  }, [params, detail])
 
   useEffect(() => {
     const mesh = meshRef.current
@@ -79,7 +81,7 @@ export function SculptureMesh({
     const now = state.clock.getElapsedTime()
     if (now - lastBuild.current < REBUILD_INTERVAL) return
     lastBuild.current = now
-    swap(buildSculpture(drifted(params, phase.current)))
+    swap(buildSculpture(drifted(params, phase.current), detail))
   })
 
   return (

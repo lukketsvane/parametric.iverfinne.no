@@ -58,9 +58,9 @@ function clamp(v: number, min: number, max: number) {
 /* ------------------------------------------------------------------ */
 /* VESSEL: revolved corrugated shell (vases, domes, tumblers)          */
 /* ------------------------------------------------------------------ */
-function buildVessel(p: SculptureParams): THREE.BufferGeometry {
-  const Nu = clamp(Math.round(p.fins * 8), 220, 512)
-  const Nv = 168
+function buildVessel(p: SculptureParams, detail: number): THREE.BufferGeometry {
+  const Nu = clamp(Math.round(p.fins * 8 * detail), 220, Math.round(512 * detail))
+  const Nv = Math.round(168 * detail)
   const H = 3.2
   const baseR = 1.05
 
@@ -110,9 +110,9 @@ function buildVessel(p: SculptureParams): THREE.BufferGeometry {
 /* ------------------------------------------------------------------ */
 /* RING: corrugated torus (fin wheels, coiled donuts)                  */
 /* ------------------------------------------------------------------ */
-function buildRing(p: SculptureParams): THREE.BufferGeometry {
-  const Nu = clamp(Math.round(p.fins * 10), 260, 720) // around the ring
-  const Nv = 64 // cross-section
+function buildRing(p: SculptureParams, detail: number): THREE.BufferGeometry {
+  const Nu = clamp(Math.round(p.fins * 10 * detail), 260, Math.round(720 * detail)) // around the ring
+  const Nv = Math.round(64 * detail) // cross-section
   const Rmain = 1.5
   const tube = 0.5 * (1 + p.bulge * 0.6)
   const flatten = 0.55 + p.flare * 0.75 // vertical squash of the wheel
@@ -154,9 +154,12 @@ function buildRing(p: SculptureParams): THREE.BufferGeometry {
   return geo
 }
 
-/** ring/vessel only — "fin" sculptures are built by lib/fin-sculpture.ts */
-export function buildSculpture(p: SculptureParams): THREE.BufferGeometry {
-  return p.form === "ring" ? buildRing(p) : buildVessel(p)
+/**
+ * ring/vessel only — "fin" sculptures are built by lib/fin-sculpture.ts.
+ * `detail` scales the tessellation (1 = normal, higher = denser mesh).
+ */
+export function buildSculpture(p: SculptureParams, detail = 1): THREE.BufferGeometry {
+  return p.form === "ring" ? buildRing(p, detail) : buildVessel(p, detail)
 }
 
 /* ------------------------------------------------------------------ */
