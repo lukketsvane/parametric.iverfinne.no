@@ -22,6 +22,7 @@ export function Studio() {
   const [finParams, setFinParams] = useState<FinParams>(() =>
     genFinParams(DEFAULT_FIN_SEED),
   )
+  const [playing, setPlaying] = useState(true)
   const [mounted, setMounted] = useState(false)
 
   // avoid SSR of the WebGL canvas
@@ -30,7 +31,9 @@ export function Studio() {
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#eef0ed]">
       <div className="absolute inset-0">
-        {mounted && <SculptureViewer params={params} finParams={finParams} />}
+        {mounted && (
+          <SculptureViewer params={params} finParams={finParams} playing={playing} />
+        )}
       </div>
 
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-end p-5 pt-[calc(env(safe-area-inset-top)+16px)]">
@@ -47,6 +50,8 @@ export function Studio() {
       <ControlsPanel
         params={params}
         finParams={finParams}
+        playing={playing}
+        onTogglePlay={() => setPlaying((p) => !p)}
         onChange={setParams}
         onFinChange={setFinParams}
         onRandomize={() =>

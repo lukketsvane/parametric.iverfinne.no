@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Shuffle, SlidersHorizontal, ChevronDown } from "lucide-react"
+import { Shuffle, SlidersHorizontal, ChevronDown, Play, Pause } from "lucide-react"
 import {
   PARAM_RANGES,
   PRESETS,
@@ -80,12 +80,16 @@ function Row({
 export function ControlsPanel({
   params,
   finParams,
+  playing,
+  onTogglePlay,
   onChange,
   onFinChange,
   onRandomize,
 }: {
   params: SculptureParams
   finParams: FinParams
+  playing: boolean
+  onTogglePlay: () => void
   onChange: (p: SculptureParams) => void
   onFinChange: (p: FinParams) => void
   onRandomize: () => void
@@ -121,6 +125,17 @@ export function ControlsPanel({
 
           <div className="flex-1" />
 
+          <button
+            onClick={onTogglePlay}
+            aria-label={playing ? "Pause animation" : "Play animation"}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-200/70 text-neutral-700 transition active:scale-95"
+          >
+            {playing ? (
+              <Pause className="h-4 w-4" strokeWidth={2.2} />
+            ) : (
+              <Play className="h-4 w-4" strokeWidth={2.2} />
+            )}
+          </button>
           <button
             onClick={onRandomize}
             aria-label="Randomize form"
