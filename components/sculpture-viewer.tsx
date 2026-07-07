@@ -4,9 +4,17 @@ import { Canvas } from "@react-three/fiber"
 import { Environment, OrbitControls } from "@react-three/drei"
 import { Suspense } from "react"
 import type { SculptureParams } from "@/lib/parametric-sculpture"
+import type { FinParams } from "@/lib/fin-sculpture"
 import { SculptureMesh } from "./sculpture-mesh"
+import { FinMesh } from "./fin-mesh"
 
-export function SculptureViewer({ params }: { params: SculptureParams }) {
+export function SculptureViewer({
+  params,
+  finParams,
+}: {
+  params: SculptureParams
+  finParams: FinParams
+}) {
   return (
     <Canvas
       shadows
@@ -30,7 +38,11 @@ export function SculptureViewer({ params }: { params: SculptureParams }) {
 
       <Suspense fallback={null}>
         <group rotation={[0.3, 0.4, 0]}>
-          <SculptureMesh params={params} />
+          {params.form === "fin" ? (
+            <FinMesh params={finParams} />
+          ) : (
+            <SculptureMesh params={params} />
+          )}
         </group>
         <Environment preset="studio" environmentIntensity={0.85} />
       </Suspense>
