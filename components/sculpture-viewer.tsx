@@ -12,21 +12,26 @@ export function SculptureViewer({
   params,
   finParams,
   playing,
+  speed,
+  dark,
 }: {
   params: SculptureParams
   finParams: FinParams
   playing: boolean
+  speed: number
+  dark: boolean
 }) {
+  const bg = dark ? "#000000" : "#ffffff"
   return (
     <Canvas
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true }}
-      camera={{ position: [0, 0.8, 9.5], fov: 40 }}
+      camera={{ position: [0, 0.9, 12], fov: 40 }}
       className="touch-none"
     >
-      <color attach="background" args={["#eef0ed"]} />
-      <fog attach="fog" args={["#eef0ed", 12, 22]} />
+      <color attach="background" args={[bg]} />
+      <fog attach="fog" args={[bg, 20, 46]} />
 
       <ambientLight intensity={0.55} />
       <directionalLight
@@ -36,14 +41,14 @@ export function SculptureViewer({
         shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0002}
       />
-      <directionalLight position={[-5, 2, -3]} intensity={0.5} color="#dfe8ff" />
+      <directionalLight position={[-5, 2, -3]} intensity={0.5} />
 
       <Suspense fallback={null}>
         <group rotation={[0.3, 0.4, 0]}>
           {params.form === "fin" ? (
-            <FinMesh params={finParams} playing={playing} />
+            <FinMesh params={finParams} playing={playing} speed={speed} dark={dark} />
           ) : (
-            <SculptureMesh params={params} playing={playing} />
+            <SculptureMesh params={params} playing={playing} speed={speed} dark={dark} />
           )}
         </group>
         <Environment preset="studio" environmentIntensity={0.85} />
@@ -52,8 +57,8 @@ export function SculptureViewer({
       <OrbitControls
         enablePan={false}
         enableZoom
-        minDistance={7.5}
-        maxDistance={11.5}
+        minDistance={5}
+        maxDistance={26}
         enableRotate
         rotateSpeed={0.9}
         minPolarAngle={0.25}

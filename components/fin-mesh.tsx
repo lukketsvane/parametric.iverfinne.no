@@ -48,10 +48,21 @@ function drifted(params: FinParams, t: number): FinParams {
 
 const REBUILD_INTERVAL = 0.12
 
-export function FinMesh({ params, playing }: { params: FinParams; playing: boolean }) {
+export function FinMesh({
+  params,
+  playing,
+  speed,
+  dark,
+}: {
+  params: FinParams
+  playing: boolean
+  speed: number
+  dark: boolean
+}) {
   const groupRef = useRef<THREE.Group>(null)
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const lastBuild = useRef(0)
+  const phase = useRef(0)
 
   // instance capacity — fins/stacks are never animated, so this only
   // changes via the sliders, which recreates the instanced mesh (args)
@@ -86,12 +97,14 @@ export function FinMesh({ params, playing }: { params: FinParams; playing: boole
     return () => mesh?.geometry?.dispose()
   }, [])
 
-  useFrame(({ clock }) => {
+  useFrame((state, delta) => {
     if (!playing) return
-    const t = clock.getElapsedTime()
-    if (t - lastBuild.current < REBUILD_INTERVAL) return
-    lastBuild.current = t
-    apply(buildFinSculpture(drifted(params, t)))
+    // advance an internal phase clock by the current speed so 1x↔2x is smooth
+    phase.current += delta * speed
+    const now = state.clock.getElapsedTime()
+    if (now - lastBuild.current < REBUILD_INTERVAL) return
+    lastBuild.current = now
+    apply(buildFinSculpture(drifted(params, phase.current)))
   })
 
   return (
@@ -103,7 +116,11 @@ export function FinMesh({ params, playing }: { params: FinParams; playing: boole
         castShadow
         receiveShadow
       >
-        <meshStandardMaterial color="#cccccc" roughness={0.4} metalness={0} />
+        <meshStandardMaterial
+          color={dark ? "#ffffff" : "#000000"}
+          roughness={0.42}
+          metalness={0}
+        />
       </instancedMesh>
     </group>
   )
