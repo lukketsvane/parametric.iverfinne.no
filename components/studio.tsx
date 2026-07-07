@@ -30,6 +30,19 @@ function useSystemDark() {
   return dark
 }
 
+// desktop = fine pointer + roomy viewport; only there do we offer max detail
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: fine) and (min-width: 1024px)")
+    const sync = () => setDesktop(mq.matches)
+    sync()
+    mq.addEventListener("change", sync)
+    return () => mq.removeEventListener("change", sync)
+  }, [])
+  return desktop
+}
+
 export function Studio() {
   const [params, setParams] = useState<SculptureParams>(DEFAULT_PARAMS)
   const [finParams, setFinParams] = useState<FinParams>(() =>
@@ -37,11 +50,16 @@ export function Studio() {
   )
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(1)
+  const [hiDetail, setHiDetail] = useState(false)
   const [mounted, setMounted] = useState(false)
   const dark = useSystemDark()
+  const isDesktop = useIsDesktop()
 
   // avoid SSR of the WebGL canvas
   useEffect(() => setMounted(true), [])
+
+  // never leave hi-detail on for a non-desktop client
+  const detailOn = hiDetail && isDesktop
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-white dark:bg-black">
@@ -53,6 +71,7 @@ export function Studio() {
             playing={playing}
             speed={playing ? speed : 1}
             dark={dark}
+            hiDetail={detailOn}
           />
         )}
       </div>
@@ -73,6 +92,9 @@ export function Studio() {
         finParams={finParams}
         playing={playing}
         speed={speed}
+        isDesktop={isDesktop}
+        hiDetail={hiDetail}
+        onToggleDetail={() => setHiDetail((d) => !d)}
         onTogglePlay={() => setPlaying((p) => !p)}
         onToggleSpeed={() => setSpeed((s) => (s === 1 ? 2 : 1))}
         onChange={setParams}

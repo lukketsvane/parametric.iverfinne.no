@@ -53,11 +53,13 @@ export function FinMesh({
   playing,
   speed,
   dark,
+  detail,
 }: {
   params: FinParams
   playing: boolean
   speed: number
   dark: boolean
+  detail: number
 }) {
   const groupRef = useRef<THREE.Group>(null)
   const meshRef = useRef<THREE.InstancedMesh>(null)
@@ -88,9 +90,9 @@ export function FinMesh({
   }
 
   useEffect(() => {
-    apply(buildFinSculpture(params))
+    apply(buildFinSculpture(params, detail))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params])
+  }, [params, detail])
 
   useEffect(() => {
     const mesh = meshRef.current
@@ -104,7 +106,7 @@ export function FinMesh({
     const now = state.clock.getElapsedTime()
     if (now - lastBuild.current < REBUILD_INTERVAL) return
     lastBuild.current = now
-    apply(buildFinSculpture(drifted(params, phase.current)))
+    apply(buildFinSculpture(drifted(params, phase.current), detail))
   })
 
   return (

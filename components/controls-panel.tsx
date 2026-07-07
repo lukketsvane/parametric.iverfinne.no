@@ -1,7 +1,14 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Shuffle, SlidersHorizontal, ChevronDown, Play, Pause } from "lucide-react"
+import {
+  Shuffle,
+  SlidersHorizontal,
+  ChevronDown,
+  Play,
+  Pause,
+  Download,
+} from "lucide-react"
 import {
   PARAM_RANGES,
   PRESETS,
@@ -15,6 +22,7 @@ import {
   randomFinSeed,
   type FinParams,
 } from "@/lib/fin-sculpture"
+import { downloadSTL } from "@/lib/export-stl"
 
 type Key = keyof typeof PARAM_RANGES
 
@@ -46,17 +54,18 @@ const FIN_SLIDERS: { key: FinKey; label: string }[] = [
   { key: "punch", label: "Holes" },
 ]
 
-// monochrome control classes — pure black/white, inverted when active
+// monochrome controls — solid black/white ink, thin subtle hairline outlines
+const HAIR = "border-black/15 dark:border-white/20"
 const ICON_BTN =
-  "flex h-11 w-11 items-center justify-center rounded-full border border-black text-black transition active:scale-95 dark:border-white dark:text-white"
+  `flex h-10 w-10 items-center justify-center rounded-full border ${HAIR} text-black transition active:scale-95 dark:text-white`
 const ICON_BTN_SOLID =
-  "flex h-11 w-11 items-center justify-center rounded-full bg-black text-white transition active:scale-95 dark:bg-white dark:text-black"
+  "flex h-10 w-10 items-center justify-center rounded-full bg-black text-white transition active:scale-95 dark:bg-white dark:text-black"
 
 function chipClass(active: boolean) {
   return `min-h-[32px] rounded-full border px-3 text-[11px] font-medium capitalize transition active:scale-95 ${
     active
-      ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-      : "border-black/40 text-black dark:border-white/40 dark:text-white"
+      ? "border-transparent bg-black text-white dark:bg-white dark:text-black"
+      : `${HAIR} text-black dark:text-white`
   }`
 }
 
@@ -98,6 +107,9 @@ export function ControlsPanel({
   finParams,
   playing,
   speed,
+  isDesktop,
+  hiDetail,
+  onToggleDetail,
   onTogglePlay,
   onToggleSpeed,
   onChange,
@@ -108,6 +120,9 @@ export function ControlsPanel({
   finParams: FinParams
   playing: boolean
   speed: number
+  isDesktop: boolean
+  hiDetail: boolean
+  onToggleDetail: () => void
   onTogglePlay: () => void
   onToggleSpeed: () => void
   onChange: (p: SculptureParams) => void
@@ -141,16 +156,16 @@ export function ControlsPanel({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-      <div className="pointer-events-auto w-full max-w-md rounded-3xl border border-black bg-white dark:border-white dark:bg-black">
+      <div className={`pointer-events-auto w-full max-w-md rounded-3xl border ${HAIR} bg-white dark:bg-black`}>
         {/* header row */}
-        <div className="flex items-center gap-2 p-2.5">
+        <div className="flex items-center gap-1.5 p-2.5">
           {/* form toggle */}
-          <div className="flex rounded-full border border-black p-0.5 dark:border-white">
+          <div className={`flex rounded-full border ${HAIR} p-0.5`}>
             {(["ring", "vessel", "fin"] as FormType[]).map((f) => (
               <button
                 key={f}
                 onClick={() => set({ form: f })}
-                className={`min-h-[36px] rounded-full px-3.5 text-xs font-medium capitalize transition ${
+                className={`min-h-[34px] rounded-full px-3 text-xs font-medium capitalize transition ${
                   params.form === f
                     ? "bg-black text-white dark:bg-white dark:text-black"
                     : "text-black dark:text-white"
@@ -188,6 +203,14 @@ export function ControlsPanel({
             <Shuffle className="h-4 w-4" strokeWidth={2.2} />
           </button>
           <button
+            onClick={() => downloadSTL(params, finParams)}
+            aria-label="Download STL"
+            title="Download STL"
+            className={ICON_BTN}
+          >
+            <Download className="h-4 w-4" strokeWidth={2.2} />
+          </button>
+          <button
             onClick={() => setOpen((o) => !o)}
             aria-label={open ? "Hide controls" : "Show controls"}
             aria-expanded={open}
@@ -204,6 +227,31 @@ export function ControlsPanel({
         {/* expandable body */}
         {open && (
           <div className="max-h-[52vh] overflow-y-auto px-4 pb-4">
+            {isDesktop && (
+              <button
+                onClick={onToggleDetail}
+                role="switch"
+                aria-checked={hiDetail}
+                className={`mb-3 flex w-full items-center justify-between rounded-2xl border ${HAIR} px-3 py-2 transition active:scale-[0.99]`}
+              >
+                <span className="text-[11px] uppercase tracking-widest text-black dark:text-white">
+                  Max detail
+                </span>
+                <span
+                  className={`relative h-5 w-9 rounded-full border ${HAIR} transition ${
+                    hiDetail ? "bg-black dark:bg-white" : "bg-transparent"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all ${
+                      hiDetail
+                        ? "left-[18px] bg-white dark:bg-black"
+                        : "left-0.5 bg-black dark:bg-white"
+                    }`}
+                  />
+                </span>
+              </button>
+            )}
             {isFin ? (
               <>
                 <div className="mb-3 flex flex-wrap gap-1.5">

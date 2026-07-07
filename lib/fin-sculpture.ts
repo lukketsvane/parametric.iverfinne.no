@@ -524,18 +524,18 @@ function simplifyDP(pts: Pt[], eps: number): Pt[] {
 
 // ----------------------------------------------------------- fin geometry
 
-function buildShapes(P: FinParams, topCut: boolean): THREE.Shape[] {
+function buildShapes(P: FinParams, topCut: boolean, detail: number): THREE.Shape[] {
   const F = buildLobes(P)
   const reach = P.rOut + P.spike * 0.28 + P.foot * 0.4
   const rMax = reach * 1.28
   const yFloor = -P.foot * F.lobeH
   const yMax = P.height * (topCut ? 1.02 : 1.4)
-  const nx = 150
+  const nx = Math.round(150 * detail)
   const ny = Math.round((nx * (yMax - yFloor)) / rMax) + 20
   const cell = rMax / nx
   let loops = marchLoops(
     (r, y) => fieldValue(r, y, F, P, topCut),
-    0, rMax, yFloor - cell * 3, yMax, nx, clamp(ny, 80, 340),
+    0, rMax, yFloor - cell * 3, yMax, nx, clamp(ny, 80, Math.round(340 * detail)),
   )
 
   // faceting: smooth soft forms, keep hard ones angular with coarse DP
@@ -570,8 +570,8 @@ function buildShapes(P: FinParams, topCut: boolean): THREE.Shape[] {
   return shapes
 }
 
-function buildFinGeometry(P: FinParams, topCut: boolean): THREE.BufferGeometry | null {
-  const shapes = buildShapes(P, topCut)
+function buildFinGeometry(P: FinParams, topCut: boolean, detail: number): THREE.BufferGeometry | null {
+  const shapes = buildShapes(P, topCut, detail)
   if (!shapes.length) return null
   const bs = Math.min(P.thick * 0.36, 0.026)
   let geo: THREE.BufferGeometry = new THREE.ExtrudeGeometry(shapes, {
@@ -598,9 +598,9 @@ export type FinSculpture = {
   radius: number
 }
 
-export function buildFinSculpture(input: FinParams): FinSculpture | null {
+export function buildFinSculpture(input: FinParams, detail = 1): FinSculpture | null {
   const topCut = input.stacks > 1
-  const geometry = buildFinGeometry(input, topCut)
+  const geometry = buildFinGeometry(input, topCut, detail)
   if (!geometry) return null
 
   geometry.computeBoundingBox()
