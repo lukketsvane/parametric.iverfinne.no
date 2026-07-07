@@ -14,13 +14,13 @@ import {
 import { SculptureViewer } from "./sculpture-viewer"
 import { ControlsPanel } from "./controls-panel"
 
-// deterministic default so server and client agree; seed 2 is a lattice form
-const DEFAULT_FIN_SEED = 2
+// deterministic default so server and client agree
+const DEFAULT_FIN_SEED = 7
 
 export function Studio() {
   const [params, setParams] = useState<SculptureParams>(DEFAULT_PARAMS)
   const [finParams, setFinParams] = useState<FinParams>(() =>
-    genFinParams(DEFAULT_FIN_SEED),
+    genFinParams(DEFAULT_FIN_SEED, "urchin"),
   )
   const [playing, setPlaying] = useState(true)
   const [mounted, setMounted] = useState(false)
