@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Shuffle, SlidersHorizontal, ChevronDown, Play, Pause } from "lucide-react"
 import {
   PARAM_RANGES,
@@ -46,6 +46,20 @@ const FIN_SLIDERS: { key: FinKey; label: string }[] = [
   { key: "punch", label: "Holes" },
 ]
 
+// monochrome control classes — pure black/white, inverted when active
+const ICON_BTN =
+  "flex h-11 w-11 items-center justify-center rounded-full border border-black text-black transition active:scale-95 dark:border-white dark:text-white"
+const ICON_BTN_SOLID =
+  "flex h-11 w-11 items-center justify-center rounded-full bg-black text-white transition active:scale-95 dark:bg-white dark:text-black"
+
+function chipClass(active: boolean) {
+  return `min-h-[32px] rounded-full border px-3 text-[11px] font-medium capitalize transition active:scale-95 ${
+    active
+      ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+      : "border-black/40 text-black dark:border-white/40 dark:text-white"
+  }`
+}
+
 function Row({
   label,
   value,
@@ -60,7 +74,7 @@ function Row({
   const isInt = range.step >= 1
   return (
     <label className="flex items-center gap-3 py-1.5">
-      <span className="w-20 shrink-0 text-[11px] uppercase tracking-widest text-neutral-500">
+      <span className="w-20 shrink-0 text-[11px] uppercase tracking-widest text-black dark:text-white">
         {label}
       </span>
       <input
@@ -72,7 +86,7 @@ function Row({
         value={value}
         onChange={(e) => onChange(Number.parseFloat(e.target.value))}
       />
-      <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-neutral-400">
+      <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-black dark:text-white">
         {isInt ? value : value.toFixed(2)}
       </span>
     </label>
@@ -83,7 +97,9 @@ export function ControlsPanel({
   params,
   finParams,
   playing,
+  speed,
   onTogglePlay,
+  onToggleSpeed,
   onChange,
   onFinChange,
   onRandomize,
@@ -91,12 +107,32 @@ export function ControlsPanel({
   params: SculptureParams
   finParams: FinParams
   playing: boolean
+  speed: number
   onTogglePlay: () => void
+  onToggleSpeed: () => void
   onChange: (p: SculptureParams) => void
   onFinChange: (p: FinParams) => void
   onRandomize: () => void
 }) {
   const [open, setOpen] = useState(false)
+
+  // one tap on the play button toggles play/pause; a double tap toggles 2x
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (tapTimer.current) clearTimeout(tapTimer.current)
+  }, [])
+  const handlePlayTap = () => {
+    if (tapTimer.current) {
+      clearTimeout(tapTimer.current)
+      tapTimer.current = null
+      onToggleSpeed()
+    } else {
+      tapTimer.current = setTimeout(() => {
+        tapTimer.current = null
+        onTogglePlay()
+      }, 240)
+    }
+  }
 
   const set = (patch: Partial<SculptureParams>) => onChange({ ...params, ...patch })
   const setFin = (patch: Partial<FinParams>) => onFinChange({ ...finParams, ...patch })
@@ -105,19 +141,19 @@ export function ControlsPanel({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-      <div className="pointer-events-auto w-full max-w-md rounded-3xl border border-white/60 bg-white/70 shadow-[0_8px_40px_rgba(90,110,105,0.18)] backdrop-blur-xl">
+      <div className="pointer-events-auto w-full max-w-md rounded-3xl border border-black bg-white dark:border-white dark:bg-black">
         {/* header row */}
         <div className="flex items-center gap-2 p-2.5">
           {/* form toggle */}
-          <div className="flex rounded-full bg-neutral-200/70 p-0.5">
+          <div className="flex rounded-full border border-black p-0.5 dark:border-white">
             {(["ring", "vessel", "fin"] as FormType[]).map((f) => (
               <button
                 key={f}
                 onClick={() => set({ form: f })}
                 className={`min-h-[36px] rounded-full px-3.5 text-xs font-medium capitalize transition ${
                   params.form === f
-                    ? "bg-white text-neutral-800 shadow-sm"
-                    : "text-neutral-500"
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "text-black dark:text-white"
                 }`}
               >
                 {f}
@@ -128,20 +164,26 @@ export function ControlsPanel({
           <div className="flex-1" />
 
           <button
-            onClick={onTogglePlay}
+            onClick={handlePlayTap}
             aria-label={playing ? "Pause animation" : "Play animation"}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-200/70 text-neutral-700 transition active:scale-95"
+            title="Tap: play / pause · Double-tap: 2× speed"
+            className={`relative ${ICON_BTN}`}
           >
             {playing ? (
               <Pause className="h-4 w-4" strokeWidth={2.2} />
             ) : (
               <Play className="h-4 w-4" strokeWidth={2.2} />
             )}
+            {speed === 2 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-black px-1 text-[9px] font-bold leading-none text-white dark:bg-white dark:text-black">
+                2×
+              </span>
+            )}
           </button>
           <button
             onClick={onRandomize}
             aria-label="Randomize form"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-800 text-white transition active:scale-95"
+            className={ICON_BTN_SOLID}
           >
             <Shuffle className="h-4 w-4" strokeWidth={2.2} />
           </button>
@@ -149,7 +191,7 @@ export function ControlsPanel({
             onClick={() => setOpen((o) => !o)}
             aria-label={open ? "Hide controls" : "Show controls"}
             aria-expanded={open}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-200/70 text-neutral-700 transition active:scale-95"
+            className={ICON_BTN}
           >
             {open ? (
               <ChevronDown className="h-4 w-4" strokeWidth={2.2} />
@@ -169,11 +211,7 @@ export function ControlsPanel({
                     <button
                       key={fam}
                       onClick={() => onFinChange(genFinParams(randomFinSeed(), fam))}
-                      className={`min-h-[32px] rounded-full border px-3 text-[11px] font-medium capitalize transition active:scale-95 ${
-                        finParams.family === fam
-                          ? "border-neutral-400 bg-white text-neutral-800"
-                          : "border-neutral-200 bg-white/80 text-neutral-600"
-                      }`}
+                      className={chipClass(finParams.family === fam)}
                     >
                       {fam}
                     </button>
@@ -190,7 +228,7 @@ export function ControlsPanel({
                   />
                 ))}
 
-                <p className="pt-2 text-center text-[10px] uppercase tracking-widest text-neutral-400">
+                <p className="pt-2 text-center text-[10px] uppercase tracking-widest text-black/60 dark:text-white/60">
                   seed {finParams.seed} · {finParams.family}
                 </p>
               </>
@@ -201,7 +239,7 @@ export function ControlsPanel({
                     <button
                       key={p.name}
                       onClick={() => onChange(p.params)}
-                      className="min-h-[32px] rounded-full border border-neutral-200 bg-white/80 px-3 text-[11px] font-medium text-neutral-600 transition active:scale-95"
+                      className={chipClass(false)}
                     >
                       {p.name}
                     </button>

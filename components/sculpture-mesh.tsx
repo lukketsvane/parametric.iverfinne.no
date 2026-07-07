@@ -38,12 +38,17 @@ const REBUILD_INTERVAL = 1 / 15
 export function SculptureMesh({
   params,
   playing,
+  speed,
+  dark,
 }: {
   params: SculptureParams
   playing: boolean
+  speed: number
+  dark: boolean
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
   const lastBuild = useRef(0)
+  const phase = useRef(0)
 
   // swap in a freshly built geometry, disposing the one it replaces
   const swap = (geo: THREE.BufferGeometry) => {
@@ -67,19 +72,21 @@ export function SculptureMesh({
     return () => mesh?.geometry?.dispose()
   }, [])
 
-  useFrame(({ clock }) => {
+  useFrame((state, delta) => {
     if (!playing) return
-    const t = clock.getElapsedTime()
-    if (t - lastBuild.current < REBUILD_INTERVAL) return
-    lastBuild.current = t
-    swap(buildSculpture(drifted(params, t)))
+    // advance an internal phase clock by the current speed so 1x↔2x is smooth
+    phase.current += delta * speed
+    const now = state.clock.getElapsedTime()
+    if (now - lastBuild.current < REBUILD_INTERVAL) return
+    lastBuild.current = now
+    swap(buildSculpture(drifted(params, phase.current)))
   })
 
   return (
     <mesh ref={meshRef} castShadow receiveShadow>
       <meshStandardMaterial
-        color="#cccccc"
-        roughness={0.4}
+        color={dark ? "#ffffff" : "#000000"}
+        roughness={0.42}
         metalness={0}
         side={THREE.DoubleSide}
       />
