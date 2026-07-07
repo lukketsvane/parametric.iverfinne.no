@@ -1,7 +1,7 @@
 "use client"
 
 import { Canvas } from "@react-three/fiber"
-import { Environment, OrbitControls, ContactShadows } from "@react-three/drei"
+import { Environment, OrbitControls } from "@react-three/drei"
 import { Suspense } from "react"
 import type { SculptureParams } from "@/lib/parametric-sculpture"
 import { SculptureMesh } from "./sculpture-mesh"
@@ -12,7 +12,7 @@ export function SculptureViewer({ params }: { params: SculptureParams }) {
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true }}
-      camera={{ position: [0, 0.8, 8], fov: 40 }}
+      camera={{ position: [0, 0.8, 9.5], fov: 40 }}
       className="touch-none"
     >
       <color attach="background" args={["#eef0ed"]} />
@@ -32,20 +32,14 @@ export function SculptureViewer({ params }: { params: SculptureParams }) {
         <group rotation={[0.3, 0.4, 0]}>
           <SculptureMesh params={params} />
         </group>
-        <ContactShadows
-          position={[0, -1.65, 0]}
-          opacity={0.32}
-          scale={9}
-          blur={2.6}
-          far={4}
-          color="#93a29d"
-        />
         <Environment preset="studio" environmentIntensity={0.85} />
       </Suspense>
 
       <OrbitControls
         enablePan={false}
-        enableZoom={false}
+        enableZoom
+        minDistance={7.5}
+        maxDistance={11.5}
         enableRotate
         rotateSpeed={0.9}
         autoRotate
