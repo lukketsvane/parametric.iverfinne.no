@@ -2,19 +2,43 @@ import * as THREE from "three"
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js"
 
 /*
- * Fin sculptures — generative parametric porcelain forms (ported from the
- * pegbox draft). Every sculpture is N copies of a single "fin" arrayed
- * radially around an axis (optionally stacked in rings). The fin's profile
- * lives in the (radial, vertical) plane and is grown from a scalar field:
- * a vertical chain of star-modulated lobes plus a connecting spine, minus
- * punch-holes, cut flat at the floor. Marching squares extracts the outline
- * (holes included), which is extruded with a bevel and glazed with vertex
- * colors.
+ * Fin sculptures — generative parametric porcelain forms grown from a
+ * sea-urchin morphology vocabulary. Every sculpture is N copies of a single
+ * "fin" arrayed radially around a vertical axis (optionally stacked in
+ * rings). The fin's profile lives in the (radial, vertical) plane and is
+ * grown from a scalar field, then contoured with marching squares and
+ * extruded with a bevel.
+ *
+ * The fin is the urchin's ambulacral column. On top of the base chain of
+ * star-modulated lobes + connecting spine we layer the features seen across
+ * the reference forms:
+ *
+ *   bead   — tubercles: nodal swellings pinched along the column (spindles)
+ *   spike  — spines: radial teeth projecting from the outer rim
+ *   facet  — angular, stepped edges instead of smooth ones
+ *   foot   — splayed pointed feet where the column meets the oral floor
+ *   rimWave— an oblate test whose rim undulates around the circumference
+ *   punch  — apical / interambulacral perforations
  */
 
-export type FinFamily = "wild" | "spokes" | "lattice" | "crown" | "kelp"
+export type FinFamily =
+  | "wild"
+  | "urchin"
+  | "star"
+  | "spindle"
+  | "disc"
+  | "bowl"
+  | "crown"
 
-export const FIN_FAMILIES: FinFamily[] = ["wild", "spokes", "lattice", "crown", "kelp"]
+export const FIN_FAMILIES: FinFamily[] = [
+  "wild",
+  "urchin",
+  "star",
+  "spindle",
+  "disc",
+  "bowl",
+  "crown",
+]
 
 export type FinParams = {
   seed: number
@@ -44,21 +68,30 @@ export type FinParams = {
   thick: number
   /** punch-hole strength */
   punch: number
+  /** tubercle beading: nodal pinch/swell up the column */
+  bead: number
+  beadK: number
+  /** radial spines projecting from the outer rim */
+  spike: number
+  spikeK: number
+  /** angularity of the outline — 0 smooth, 1 hard faceted */
+  facet: number
+  /** splayed pointed feet at the oral floor */
+  foot: number
+  /** undulation of the rim around the ring (per-fin vertical wave) */
+  rimWave: number
+  rimWaveK: number
   starPhase: number
   twistPhase: number
   shearAlt: boolean
   bulge: number
   tilt: number
   stackTwist: number
-  /** celadon glaze */
-  hue: number
-  sat: number
-  lit: number
 }
 
 export const FIN_PARAM_RANGES = {
   fins: { min: 8, max: 48, step: 1 },
-  rows: { min: 1, max: 4, step: 1 },
+  rows: { min: 1, max: 5, step: 1 },
   stacks: { min: 1, max: 3, step: 1 },
   height: { min: 0.4, max: 2.4, step: 0.01 },
   rOut: { min: 0.9, max: 1.6, step: 0.01 },
@@ -67,6 +100,11 @@ export const FIN_PARAM_RANGES = {
   shear: { min: -0.8, max: 0.8, step: 0.01 },
   thick: { min: 0.05, max: 0.28, step: 0.005 },
   punch: { min: 0, max: 1, step: 0.01 },
+  bead: { min: 0, max: 0.6, step: 0.01 },
+  spike: { min: 0, max: 1, step: 0.01 },
+  facet: { min: 0, max: 1, step: 0.01 },
+  foot: { min: 0, max: 1, step: 0.01 },
+  rimWave: { min: 0, max: 0.6, step: 0.01 },
 } as const
 
 // ---------------------------------------------------------------- utilities
@@ -95,26 +133,70 @@ export function genFinParams(seed: number, family?: FinFamily): FinParams {
   const ri = (a: number, b: number) => Math.floor(rr(a, b + 0.999))
   const pick = <T,>(arr: readonly T[]) => arr[Math.floor(R() * arr.length)]
 
-  const rolled = R() < 0.36 ? "wild" : pick(FIN_FAMILIES.slice(1))
+  const rolled = R() < 0.3 ? "wild" : pick(FIN_FAMILIES.slice(1))
   const fam = family ?? rolled
   const P = { seed, family: fam } as FinParams
 
-  if (fam === "spokes") {
-    // low stacked discs of flat radial blades
-    P.fins = ri(24, 40); P.rows = 1; P.stacks = ri(2, 3)
-    P.height = rr(0.42, 0.62); P.rIn = rr(0.42, 0.55); P.rOut = rr(1.3, 1.55)
-    P.aspR = rr(1.0, 1.25); P.aspY = rr(0.8, 1.0)
-    P.starK = pick([2, 3]); P.starAmp = rr(0, 0.15)
-    P.pw = rr(1.3, 2.2); P.shear = rr(-0.15, 0.15)
-    P.thick = rr(0.1, 0.16); P.punch = rr(0, 0.4)
-  } else if (fam === "lattice") {
-    // stacked star/cross lattice ring
-    P.fins = ri(14, 22); P.rows = 3; P.stacks = 1
-    P.height = rr(1.0, 1.35); P.rIn = rr(0.55, 0.7); P.rOut = rr(1.12, 1.3)
-    P.aspR = rr(1.1, 1.35); P.aspY = rr(1.0, 1.15)
-    P.starK = 4; P.starAmp = rr(0.25, 0.45)
-    P.pw = rr(2.0, 4.0); P.shear = rr(-0.1, 0.1)
-    P.thick = rr(0.15, 0.22); P.punch = rr(0.6, 1)
+  // morphology defaults — families override what they need
+  P.bead = 0; P.beadK = 4; P.spike = 0; P.spikeK = 3
+  P.facet = 0.12; P.foot = 0.18; P.rimWave = 0; P.rimWaveK = 2
+
+  if (fam === "urchin") {
+    // stacked test of block tubercles bristling with radial spines (IMG_7398)
+    P.fins = ri(20, 30); P.rows = 2; P.stacks = ri(2, 3)
+    P.height = rr(0.5, 0.72); P.rIn = rr(0.5, 0.65); P.rOut = rr(1.15, 1.35)
+    P.aspR = rr(1.1, 1.3); P.aspY = rr(0.9, 1.1)
+    P.starK = 4; P.starAmp = rr(0.12, 0.3)
+    P.pw = rr(2.6, 4.2); P.shear = rr(-0.1, 0.1)
+    P.thick = rr(0.14, 0.2); P.punch = rr(0.7, 1)
+    P.bead = rr(0.28, 0.46); P.beadK = ri(4, 6)
+    P.spike = rr(0.5, 0.9); P.spikeK = ri(3, 5)
+    P.facet = rr(0.1, 0.25); P.foot = rr(0.08, 0.22)
+  } else if (fam === "star") {
+    // tall angular stepped blades on splayed feet (IMG_7397)
+    P.fins = ri(16, 22); P.rows = ri(1, 2); P.stacks = 1
+    P.height = rr(1.4, 1.9); P.rIn = rr(0.4, 0.55); P.rOut = rr(1.25, 1.5)
+    P.aspR = rr(0.9, 1.1); P.aspY = rr(1.0, 1.2)
+    P.starK = 3; P.starAmp = rr(0.3, 0.5)
+    P.pw = rr(3.0, 5.0); P.shear = rr(-0.3, 0.3)
+    P.thick = rr(0.12, 0.18); P.punch = rr(0.2, 0.5)
+    P.bead = rr(0.1, 0.25); P.beadK = ri(2, 3)
+    P.spike = rr(0.2, 0.45); P.spikeK = ri(2, 3)
+    P.facet = rr(0.6, 0.85); P.foot = rr(0.5, 0.9)
+  } else if (fam === "spindle") {
+    // vertical chains of teardrop beads, pointed feet (IMG_7399)
+    P.fins = ri(18, 26); P.rows = ri(3, 5); P.stacks = 1
+    P.height = rr(1.2, 1.6); P.rIn = rr(0.45, 0.6); P.rOut = rr(1.05, 1.3)
+    P.aspR = rr(0.9, 1.1); P.aspY = rr(1.1, 1.35)
+    P.starK = 2; P.starAmp = rr(0.08, 0.22)
+    P.pw = rr(2.0, 3.2); P.shear = rr(-0.15, 0.15)
+    P.thick = rr(0.12, 0.18); P.punch = rr(0.5, 0.9)
+    P.bead = rr(0.32, 0.5); P.beadK = P.rows * 2
+    P.spike = rr(0, 0.18); P.spikeK = ri(2, 3)
+    P.facet = rr(0.08, 0.2); P.foot = rr(0.6, 1.0)
+  } else if (fam === "disc") {
+    // flat dense oblate ring with nodular rim (IMG_7400)
+    P.fins = ri(30, 44); P.rows = 1; P.stacks = ri(2, 3)
+    P.height = rr(0.36, 0.5); P.rIn = rr(0.4, 0.55); P.rOut = rr(1.3, 1.55)
+    P.aspR = rr(1.1, 1.3); P.aspY = rr(0.8, 1.0)
+    P.starK = pick([2, 3]); P.starAmp = rr(0, 0.12)
+    P.pw = rr(1.5, 2.4); P.shear = rr(-0.1, 0.1)
+    P.thick = rr(0.1, 0.15); P.punch = rr(0.3, 0.6)
+    P.bead = rr(0.22, 0.4); P.beadK = ri(3, 5)
+    P.spike = rr(0.3, 0.6); P.spikeK = ri(2, 4)
+    P.facet = rr(0.08, 0.2); P.foot = rr(0.1, 0.3)
+  } else if (fam === "bowl") {
+    // open vessel with an undulating rim (PNG)
+    P.fins = ri(22, 34); P.rows = ri(1, 2); P.stacks = 1
+    P.height = rr(0.9, 1.3); P.rIn = rr(0.5, 0.65); P.rOut = rr(1.15, 1.4)
+    P.aspR = rr(1.0, 1.25); P.aspY = rr(1.0, 1.2)
+    P.starK = 2; P.starAmp = rr(0.05, 0.2)
+    P.pw = rr(1.4, 2.2); P.shear = rr(-0.2, 0.2)
+    P.thick = rr(0.12, 0.2); P.punch = rr(0.4, 0.8)
+    P.bead = rr(0.05, 0.2); P.beadK = ri(2, 4)
+    P.spike = rr(0, 0.15); P.spikeK = ri(2, 3)
+    P.facet = rr(0.04, 0.14); P.foot = rr(0.2, 0.45)
+    P.rimWave = rr(0.25, 0.5); P.rimWaveK = pick([2, 3])
   } else if (fam === "crown") {
     // tall angular zigzag blades
     P.fins = ri(16, 26); P.rows = ri(1, 2); P.stacks = 1
@@ -123,25 +205,24 @@ export function genFinParams(seed: number, family?: FinFamily): FinParams {
     P.starK = pick([2, 3]); P.starAmp = rr(0.2, 0.45)
     P.pw = rr(2.5, 5.0); P.shear = rr(0.35, 0.75) * pick([-1, 1])
     P.thick = rr(0.07, 0.12); P.punch = rr(0.3, 0.8)
-  } else if (fam === "kelp") {
-    // soft blobby wavering fins
-    P.fins = ri(18, 30); P.rows = ri(2, 3); P.stacks = 1
-    P.height = rr(1.1, 1.55); P.rIn = rr(0.45, 0.6); P.rOut = rr(1.1, 1.35)
-    P.aspR = rr(0.95, 1.2); P.aspY = rr(1.0, 1.2)
-    P.starK = pick([2, 3]); P.starAmp = rr(0.05, 0.2)
-    P.pw = rr(1.0, 1.7); P.shear = rr(-0.3, 0.3)
-    P.thick = rr(0.12, 0.2); P.punch = rr(0.5, 1)
+    P.bead = rr(0.05, 0.2); P.beadK = ri(2, 4)
+    P.spike = rr(0.1, 0.3); P.spikeK = ri(2, 3)
+    P.facet = rr(0.4, 0.7); P.foot = rr(0.3, 0.6)
   } else {
-    // wild — the rest of the space
-    P.rows = ri(1, 4)
+    // wild — roam the whole space
+    P.rows = ri(1, 5)
     P.stacks = P.rows > 2 ? 1 : ri(1, 3)
-    P.fins = ri(10, 44)
-    P.height = rr(0.4, 2.2) / (P.stacks > 1 ? 1.6 : 1)
+    P.fins = ri(12, 44)
+    P.height = rr(0.4, 2.0) / (P.stacks > 1 ? 1.6 : 1)
     P.rIn = rr(0.35, 0.7); P.rOut = rr(1.0, 1.55)
-    P.aspR = rr(0.8, 1.35); P.aspY = rr(0.8, 1.25)
-    P.starK = ri(2, 6); P.starAmp = rr(0, 0.5)
-    P.pw = rr(1.0, 5.0); P.shear = rr(-0.7, 0.7)
-    P.thick = rr(0.06, 0.24); P.punch = rr(0, 1)
+    P.aspR = rr(0.8, 1.35); P.aspY = rr(0.85, 1.3)
+    P.starK = ri(2, 5); P.starAmp = rr(0, 0.5)
+    P.pw = rr(1.4, 5.0); P.shear = rr(-0.6, 0.6)
+    P.thick = rr(0.07, 0.22); P.punch = rr(0, 1)
+    P.bead = rr(0, 0.5); P.beadK = ri(2, 6)
+    P.spike = rr(0, 0.8); P.spikeK = ri(2, 5)
+    P.facet = rr(0, 0.8); P.foot = rr(0, 0.9)
+    P.rimWave = R() < 0.4 ? rr(0.15, 0.45) : 0; P.rimWaveK = pick([2, 3])
   }
 
   P.starPhase = rr(0, Math.PI * 2)
@@ -150,8 +231,6 @@ export function genFinParams(seed: number, family?: FinFamily): FinParams {
   P.bulge = rr(-0.18, 0.28)
   P.tilt = rr(-0.22, 0.22)
   P.stackTwist = rr(0.6, 1.4)
-  // celadon glaze range: pale green-grey through blue-grey
-  P.hue = rr(150, 210) / 360; P.sat = rr(0.25, 0.45); P.lit = rr(0.5, 0.62)
   return P
 }
 
@@ -163,7 +242,13 @@ type Lobe = {
 }
 type Punch = { cx: number; cy: number; s: number; amp: number }
 type Spine = { r: number; w: number; y0: number; y1: number; hs: number }
-type Field = { lobes: Lobe[]; punches: Punch[]; spine: Spine | null }
+type Field = {
+  lobes: Lobe[]
+  punches: Punch[]
+  spine: Spine | null
+  lobeH: number
+  footY: number
+}
 
 function buildLobes(P: FinParams): Field {
   const J = mulberry32((P.seed ^ 0x9e3779b9) >>> 0) // stable per-seed jitter
@@ -219,18 +304,26 @@ function buildLobes(P: FinParams): Field {
         hs: lobeH * 0.4,
       }
     : null
-  return { lobes, punches, spine }
+  return { lobes, punches, spine, lobeH, footY: lobes[0].cy }
 }
 
 function fieldValue(r: number, y: number, F: Field, P: FinParams, topCut: boolean) {
-  if (y < 0 || r < 0.04) return -1
+  const floor = -P.foot * F.lobeH
+  if (y < floor || r < 0.04) return -1
   if (topCut && y > P.height) return -1
+  // outward splay of the feet: below the lowest lobe, push the column out
+  const below = P.foot > 0 ? Math.max(0, (F.footY - y) / F.lobeH) : 0
+  const splay = P.foot * 1.15 * below
   let f = 0
   for (const L of F.lobes) {
     let dx = (r - L.cx) / L.sx
     const dy = (y - L.cy) / L.sy
-    dx += L.shear * dy
-    const m = 1 + L.amp * Math.cos(L.k * Math.atan2(dy, dx) + L.phase)
+    dx += L.shear * dy + splay
+    let m = 1 + L.amp * Math.cos(L.k * Math.atan2(dy, dx) + L.phase)
+    // tubercle beading: pinch/swell the radius up the column
+    if (P.bead > 0) {
+      m *= 1 + P.bead * Math.cos((P.beadK * y) / F.lobeH * Math.PI + L.phase)
+    }
     const d2 = (dx * dx + dy * dy) * m * m
     f += 1 / (1 + Math.pow(d2, L.pw))
   }
@@ -246,6 +339,13 @@ function fieldValue(r: number, y: number, F: Field, P: FinParams, topCut: boolea
     const dy = (y - Q.cy) / Q.s
     const d2 = dx * dx + dy * dy
     f -= Q.amp / (1 + d2 * d2)
+  }
+  // radial spines: a vertical comb of teeth projecting past the outer rim
+  if (P.spike > 0 && y > 0) {
+    const dr = (r - P.rOut) / (0.17 + P.thick)
+    const rim = Math.exp(-dr * dr)
+    const comb = Math.max(0, Math.cos((P.spikeK * y) / F.lobeH * Math.PI))
+    f += P.spike * 0.85 * rim * comb * comb
   }
   return f - 0.5
 }
@@ -426,18 +526,23 @@ function simplifyDP(pts: Pt[], eps: number): Pt[] {
 
 function buildShapes(P: FinParams, topCut: boolean): THREE.Shape[] {
   const F = buildLobes(P)
-  const rMax = P.rOut * 1.3
+  const reach = P.rOut + P.spike * 0.28 + P.foot * 0.4
+  const rMax = reach * 1.28
+  const yFloor = -P.foot * F.lobeH
   const yMax = P.height * (topCut ? 1.02 : 1.4)
-  const nx = 140
-  const ny = Math.round((nx * yMax) / rMax) + 20
+  const nx = 150
+  const ny = Math.round((nx * (yMax - yFloor)) / rMax) + 20
   const cell = rMax / nx
   let loops = marchLoops(
     (r, y) => fieldValue(r, y, F, P, topCut),
-    0, rMax, -cell * 2, yMax, nx, clamp(ny, 80, 320),
+    0, rMax, yFloor - cell * 3, yMax, nx, clamp(ny, 80, 340),
   )
 
+  // faceting: smooth soft forms, keep hard ones angular with coarse DP
+  const smoothA = 0.5 * (1 - P.facet)
+  const dpEps = cell * (0.28 + P.facet * 1.6)
   loops = loops
-    .map((l) => simplifyDP(smoothLoop(l, 0.5), cell * 0.3))
+    .map((l) => simplifyDP(P.facet > 0.55 ? l : smoothLoop(l, smoothA), dpEps))
     .filter((l) => l.length > 5)
 
   const info = loops.map((l) => ({ pts: l, area: Math.abs(signedArea(l)), depth: 0 }))
@@ -502,12 +607,18 @@ export function buildFinSculpture(input: FinParams): FinSculpture | null {
   const bb = geometry.boundingBox!
   const stackDy = input.height * 0.985
   const halfStep = Math.PI / input.fins
+  const rimAmp = input.rimWave * input.height
   const matrices: THREE.Matrix4[] = []
   const dummy = new THREE.Object3D()
+  let rimLo = 0, rimHi = 0
   for (let s = 0; s < input.stacks; s++) {
     const rot0 = s * halfStep * input.stackTwist
     for (let i = 0; i < input.fins; i++) {
-      dummy.position.set(0, s * stackDy, 0)
+      // rim undulation: lift each fin on a sine wave around the ring
+      const dy = rimAmp * Math.sin(input.rimWaveK * ((i * Math.PI * 2) / input.fins))
+      if (dy < rimLo) rimLo = dy
+      if (dy > rimHi) rimHi = dy
+      dummy.position.set(0, s * stackDy + dy, 0)
       dummy.rotation.set(0, rot0 + (i * Math.PI * 2) / input.fins, 0)
       dummy.updateMatrix()
       matrices.push(dummy.matrix.clone())
@@ -517,8 +628,8 @@ export function buildFinSculpture(input: FinParams): FinSculpture | null {
   return {
     geometry,
     matrices,
-    minY: bb.min.y,
-    maxY: (input.stacks - 1) * stackDy + bb.max.y,
+    minY: bb.min.y + rimLo,
+    maxY: (input.stacks - 1) * stackDy + bb.max.y + rimHi,
     radius: bb.max.x + input.thick,
   }
 }

@@ -14,7 +14,9 @@ import {
 const FIT_H = 3.6
 const FIT_W = 4.6
 
-type DriftKey = "height" | "rOut" | "starAmp" | "pw" | "shear" | "thick" | "punch"
+type DriftKey =
+  | "height" | "rOut" | "starAmp" | "shear"
+  | "bead" | "spike" | "foot" | "rimWave" | "punch"
 
 // continuous params drift slowly around the user's values while playing;
 // integer params (fins, rows, stacks) stay fixed so the instance count and
@@ -23,10 +25,12 @@ const DRIFT: { key: DriftKey; speed: number; phase: number }[] = [
   { key: "height", speed: 0.11, phase: 0.6 },
   { key: "rOut", speed: 0.15, phase: 2.0 },
   { key: "starAmp", speed: 0.19, phase: 3.4 },
-  { key: "pw", speed: 0.08, phase: 4.9 },
   { key: "shear", speed: 0.13, phase: 1.2 },
-  { key: "thick", speed: 0.1, phase: 5.8 },
-  { key: "punch", speed: 0.17, phase: 2.9 },
+  { key: "bead", speed: 0.23, phase: 5.1 },
+  { key: "spike", speed: 0.17, phase: 2.9 },
+  { key: "foot", speed: 0.09, phase: 4.4 },
+  { key: "rimWave", speed: 0.14, phase: 0.9 },
+  { key: "punch", speed: 0.12, phase: 3.7 },
 ]
 
 function drifted(params: FinParams, t: number): FinParams {

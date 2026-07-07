@@ -38,9 +38,11 @@ const FIN_SLIDERS: { key: FinKey; label: string }[] = [
   { key: "height", label: "Height" },
   { key: "rOut", label: "Spread" },
   { key: "starAmp", label: "Wave" },
-  { key: "pw", label: "Edge" },
-  { key: "shear", label: "Slant" },
-  { key: "thick", label: "Thick" },
+  { key: "bead", label: "Bead" },
+  { key: "spike", label: "Spines" },
+  { key: "facet", label: "Facet" },
+  { key: "foot", label: "Feet" },
+  { key: "rimWave", label: "Rim" },
   { key: "punch", label: "Holes" },
 ]
 
