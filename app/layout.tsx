@@ -3,22 +3,16 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Celadon — Parametric Forms',
-  description: 'An interactive 3D studio for generating endless parametric celadon sculptures.',
+  title: 'Sculpture Studio — iverfinne.no',
+  description: 'An interactive 3D studio for generating endless parametric sculptures.',
   generator: 'v0.app',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Celadon',
+    title: 'Sculpture Studio',
   },
-  applicationName: 'Celadon',
-  manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'Celadon',
-  },
+  applicationName: 'Sculpture Studio',
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },

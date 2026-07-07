@@ -22,18 +22,15 @@ export function Studio() {
         {mounted && <SculptureViewer params={params} />}
       </div>
 
-      <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <div>
-          <h1 className="text-[13px] font-semibold tracking-tight text-neutral-700">
-            Celadon
-          </h1>
-          <p className="text-[11px] tracking-wide text-neutral-400">
-            parametric forms
-          </p>
-        </div>
-        <span className="text-[11px] tracking-wide text-neutral-400">
-          drag to turn
-        </span>
+      <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-end p-5 pt-[calc(env(safe-area-inset-top)+16px)]">
+        <a
+          href="https://iverfinne.no"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pointer-events-auto text-[11px] tracking-wide text-neutral-400 hover:text-neutral-600"
+        >
+          iverfinne.no
+        </a>
       </header>
 
       <ControlsPanel
