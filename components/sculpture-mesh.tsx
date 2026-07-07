@@ -1,37 +1,87 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useRef } from "react"
 import * as THREE from "three"
-import { buildSculpture, type SculptureParams } from "@/lib/parametric-sculpture"
+import { useFrame } from "@react-three/fiber"
+import {
+  buildSculpture,
+  PARAM_RANGES,
+  type SculptureParams,
+} from "@/lib/parametric-sculpture"
 
-export function SculptureMesh({ params }: { params: SculptureParams }) {
+type DriftKey = "finDepth" | "finSharpness" | "twist" | "wavAmount" | "bulge" | "flare"
+
+// continuous params drift slowly around the user's values while playing;
+// integer params (fins, waviness) stay fixed to avoid popping
+const DRIFT: { key: DriftKey; speed: number; phase: number }[] = [
+  { key: "finDepth", speed: 0.21, phase: 0.0 },
+  { key: "finSharpness", speed: 0.13, phase: 1.7 },
+  { key: "twist", speed: 0.09, phase: 3.1 },
+  { key: "wavAmount", speed: 0.17, phase: 4.2 },
+  { key: "bulge", speed: 0.11, phase: 5.6 },
+  { key: "flare", speed: 0.15, phase: 2.4 },
+]
+
+function drifted(params: SculptureParams, t: number): SculptureParams {
+  const out = { ...params }
+  for (const { key, speed, phase } of DRIFT) {
+    const { min, max } = PARAM_RANGES[key]
+    const base = params[key]
+    const s = Math.sin(t * speed + phase) * 0.45
+    out[key] = s >= 0 ? base + (max - base) * s : base + (base - min) * s
+  }
+  return out
+}
+
+const REBUILD_INTERVAL = 1 / 15
+
+export function SculptureMesh({
+  params,
+  playing,
+}: {
+  params: SculptureParams
+  playing: boolean
+}) {
   const meshRef = useRef<THREE.Mesh>(null)
+  const lastBuild = useRef(0)
 
-  const geometry = useMemo(() => buildSculpture(params), [params])
-
-  // dispose previous geometry to avoid GPU leaks when params change
-  const prev = useRef<THREE.BufferGeometry | null>(null)
-  useEffect(() => {
-    if (prev.current && prev.current !== geometry) prev.current.dispose()
-    prev.current = geometry
-    return () => {
-      geometry.dispose()
+  // swap in a freshly built geometry, disposing the one it replaces
+  const swap = (geo: THREE.BufferGeometry) => {
+    const mesh = meshRef.current
+    if (!mesh) {
+      geo.dispose()
+      return
     }
-  }, [geometry])
+    const old = mesh.geometry
+    mesh.geometry = geo
+    old?.dispose()
+  }
+
+  useEffect(() => {
+    swap(buildSculpture(params))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
+
+  useEffect(() => {
+    const mesh = meshRef.current
+    return () => mesh?.geometry?.dispose()
+  }, [])
+
+  useFrame(({ clock }) => {
+    if (!playing) return
+    const t = clock.getElapsedTime()
+    if (t - lastBuild.current < REBUILD_INTERVAL) return
+    lastBuild.current = t
+    swap(buildSculpture(drifted(params, t)))
+  })
 
   return (
-    <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow>
-      <meshPhysicalMaterial
-        color={"#c3d6d1"}
-        roughness={0.16}
+    <mesh ref={meshRef} castShadow receiveShadow>
+      <meshStandardMaterial
+        color="#cccccc"
+        roughness={0.4}
         metalness={0}
-        clearcoat={1}
-        clearcoatRoughness={0.1}
-        reflectivity={0.55}
-        sheen={0.4}
-        sheenColor={"#eaf3f0"}
         side={THREE.DoubleSide}
-        envMapIntensity={1.0}
       />
     </mesh>
   )

@@ -11,9 +11,11 @@ import { FinMesh } from "./fin-mesh"
 export function SculptureViewer({
   params,
   finParams,
+  playing,
 }: {
   params: SculptureParams
   finParams: FinParams
+  playing: boolean
 }) {
   return (
     <Canvas
@@ -39,9 +41,9 @@ export function SculptureViewer({
       <Suspense fallback={null}>
         <group rotation={[0.3, 0.4, 0]}>
           {params.form === "fin" ? (
-            <FinMesh params={finParams} />
+            <FinMesh params={finParams} playing={playing} />
           ) : (
-            <SculptureMesh params={params} />
+            <SculptureMesh params={params} playing={playing} />
           )}
         </group>
         <Environment preset="studio" environmentIntensity={0.85} />
@@ -54,8 +56,6 @@ export function SculptureViewer({
         maxDistance={11.5}
         enableRotate
         rotateSpeed={0.9}
-        autoRotate
-        autoRotateSpeed={0.6}
         minPolarAngle={0.25}
         maxPolarAngle={Math.PI - 0.25}
         makeDefault

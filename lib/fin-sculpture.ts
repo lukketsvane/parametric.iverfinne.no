@@ -82,10 +82,6 @@ function mulberry32(seed: number) {
   }
 }
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v))
-const smoothstep = (a: number, b: number, x: number) => {
-  const t = clamp((x - a) / (b - a), 0, 1)
-  return t * t * (3 - 2 * t)
-}
 
 export function randomFinSeed() {
   return (Math.random() * 0xffffffff) >>> 0
@@ -482,26 +478,6 @@ function buildFinGeometry(P: FinParams, topCut: boolean): THREE.BufferGeometry |
   geo = mergeVertices(geo, 1e-4)
   geo.computeVertexNormals()
   geo.translate(0, 0, -P.thick / 2)
-
-  // glaze: celadon body, thin white glaze on outermost tips + top edges
-  geo.computeBoundingBox()
-  const bb = geo.boundingBox!
-  const pos = geo.getAttribute("position")
-  const col = new Float32Array(pos.count * 3)
-  const body = new THREE.Color().setHSL(P.hue, P.sat, P.lit)
-  const white = new THREE.Color(0xfbfbf6)
-  const c = new THREE.Color()
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i)
-    const tip = smoothstep(bb.max.x * 0.85, bb.max.x * 0.985, x)
-    const top = topCut ? 0 : smoothstep(bb.max.y * 0.93, bb.max.y * 0.995, y) * 0.75
-    c.copy(body).lerp(white, Math.min(1, tip + top) * 0.95)
-    const shade = 0.88 + 0.12 * smoothstep(bb.min.x, bb.max.x, x)
-    col[i * 3] = c.r * shade
-    col[i * 3 + 1] = c.g * shade
-    col[i * 3 + 2] = c.b * shade
-  }
-  geo.setAttribute("color", new THREE.BufferAttribute(col, 3))
   return geo
 }
 
