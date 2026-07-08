@@ -1,21 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import {
-  DEFAULT_PARAMS,
-  randomizeParams,
-  type SculptureParams,
-} from "@/lib/parametric-sculpture"
-import {
-  genFinParams,
-  randomFinSeed,
-  type FinParams,
-} from "@/lib/fin-sculpture"
-import { SculptureViewer } from "./sculpture-viewer"
+import { DEFAULT_PARAMS, type HolderParams } from "@/lib/candle-holder"
+import { HolderViewer } from "./holder-viewer"
 import { ControlsPanel } from "./controls-panel"
-
-// deterministic default so server and client agree
-const DEFAULT_FIN_SEED = 7
 
 // follow the system color scheme only — no in-app toggle
 function useSystemDark() {
@@ -44,10 +32,7 @@ function useIsDesktop() {
 }
 
 export function Studio() {
-  const [params, setParams] = useState<SculptureParams>(DEFAULT_PARAMS)
-  const [finParams, setFinParams] = useState<FinParams>(() =>
-    genFinParams(DEFAULT_FIN_SEED, "urchin"),
-  )
+  const [params, setParams] = useState<HolderParams>(DEFAULT_PARAMS)
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(1)
   const [hiDetail, setHiDetail] = useState(false)
@@ -65,9 +50,8 @@ export function Studio() {
     <main className="fixed inset-0 overflow-hidden bg-white dark:bg-black">
       <div className="absolute inset-0">
         {mounted && (
-          <SculptureViewer
+          <HolderViewer
             params={params}
-            finParams={finParams}
             playing={playing}
             speed={playing ? speed : 1}
             dark={dark}
@@ -89,7 +73,6 @@ export function Studio() {
 
       <ControlsPanel
         params={params}
-        finParams={finParams}
         playing={playing}
         speed={speed}
         isDesktop={isDesktop}
@@ -98,12 +81,6 @@ export function Studio() {
         onTogglePlay={() => setPlaying((p) => !p)}
         onToggleSpeed={() => setSpeed((s) => (s === 1 ? 2 : 1))}
         onChange={setParams}
-        onFinChange={setFinParams}
-        onRandomize={() =>
-          params.form === "fin"
-            ? setFinParams(genFinParams(randomFinSeed()))
-            : setParams(randomizeParams(params.form))
-        }
       />
     </main>
   )

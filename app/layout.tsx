@@ -3,16 +3,17 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Sculpture Studio — iverfinne.no',
-  description: 'An interactive 3D studio for generating endless parametric sculptures.',
+  title: 'Candle Holder Builder — iverfinne.no',
+  description:
+    'A parametric builder for organic candle stick holders — symmetries, booleans and lattices meshed into printable ceramic-like forms.',
   generator: 'v0.app',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Sculpture Studio',
+    title: 'Candle Holder Builder',
   },
-  applicationName: 'Sculpture Studio',
+  applicationName: 'Candle Holder Builder',
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },

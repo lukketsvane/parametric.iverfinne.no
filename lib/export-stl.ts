@@ -1,39 +1,15 @@
 import * as THREE from "three"
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js"
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js"
-import { buildSculpture, type SculptureParams } from "./parametric-sculpture"
-import { buildFinSculpture, type FinParams } from "./fin-sculpture"
+import { buildHolderArrays, type HolderParams } from "./candle-holder"
+import { arraysToGeometry } from "./geometry"
 
-// STL exports are baked once at high tessellation regardless of the live
+// STL exports are meshed once at high resolution regardless of the live
 // viewport quality, so downloads are always print-grade.
-const EXPORT_DETAIL = 2.2
+const EXPORT_CELLS_PER_TUBE = 10
 
-function finExportGeometry(p: FinParams): THREE.BufferGeometry | null {
-  const built = buildFinSculpture(p, EXPORT_DETAIL)
-  if (!built) return null
-  const parts = built.matrices.map((m) => built.geometry.clone().applyMatrix4(m))
-  const merged = mergeGeometries(parts, false)
-  parts.forEach((g) => g.dispose())
-  built.geometry.dispose()
-  return merged
-}
-
-/** Build the current form, encode it as a binary STL, and trigger a download. */
-export function downloadSTL(
-  params: SculptureParams,
-  finParams: FinParams,
-): void {
-  let geo: THREE.BufferGeometry | null
-  let name: string
-  if (params.form === "fin") {
-    geo = finExportGeometry(finParams)
-    name = `fin-${finParams.family}-${finParams.seed}`
-  } else {
-    geo = buildSculpture(params, EXPORT_DETAIL)
-    name = params.form
-  }
-  if (!geo) return
-
+/** Build the current holder, encode it as a binary STL, and download it. */
+export function downloadSTL(params: HolderParams): void {
+  const geo = arraysToGeometry(buildHolderArrays(params, EXPORT_CELLS_PER_TUBE))
   const mesh = new THREE.Mesh(geo)
   const data = new STLExporter().parse(mesh, { binary: true }) as unknown as DataView
   geo.dispose()
@@ -42,7 +18,7 @@ export function downloadSTL(
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `${name}.stl`
+  a.download = `candleholder-${params.family}-${params.seed}.stl`
   document.body.appendChild(a)
   a.click()
   a.remove()
