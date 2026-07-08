@@ -13,9 +13,41 @@ import { marchGrid, type Grid } from "./marching-cubes"
  * symmetry decision is exposed as a parameter.
  */
 
+/**
+ * Physical scale: 1 scene unit = 50 mm. STL exports are scaled to mm.
+ * The candle socket is built to real candle sizes:
+ *  - telys (tealight, e.g. Clas Ohlson 44-1725): Ø39 × 16 mm cup
+ *    → socket Ø41 mm, 12 mm deep
+ *  - kronelys (taper, e.g. Clas Ohlson 44-3816): Ø22 mm base, 190 mm tall
+ *    → socket Ø23 mm, 28 mm deep for grip
+ */
+export const MM_PER_UNIT = 50
+
+export type CandleType = "telys" | "kronelys"
+
+export const CANDLE_SPECS: Record<
+  CandleType,
+  { socketR: number; socketDepth: number; cupHalfH: number; label: string }
+> = {
+  telys: {
+    socketR: 20.5 / MM_PER_UNIT, // Ø41 mm
+    socketDepth: 12 / MM_PER_UNIT,
+    cupHalfH: 8.5 / MM_PER_UNIT, // 17 mm tall cup
+    label: "telys Ø39mm",
+  },
+  kronelys: {
+    socketR: 11.5 / MM_PER_UNIT, // Ø23 mm
+    socketDepth: 28 / MM_PER_UNIT,
+    cupHalfH: 16 / MM_PER_UNIT, // 32 mm tall cup
+    label: "kronelys Ø22mm",
+  },
+}
+
 export type HolderParams = {
   preset: string
   seed: number
+  /** which candle the socket is built for */
+  candle: CandleType
   /* symmetry group */
   symmetry: number
   /** 0 = cyclic Cn, 1 = dihedral Dn (adds a mirror inside each wedge) */
@@ -89,6 +121,7 @@ type Recipe = Omit<HolderParams, "preset" | "seed">
 
 export const PRESETS: Record<string, Recipe> = {
   whisk: {
+    candle: "kronelys",
     symmetry: 3, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.5, length: 1.1, decay: 0.85,
     gravity: 0.75, outward: 0.55, curl: 0.1, wiggle: 0.08, loopiness: 0.9,
@@ -97,6 +130,7 @@ export const PRESETS: Record<string, Recipe> = {
     bulb: 0.25, open: 0, cup: 0.3, cupPos: 0.62, dish: 0, rimWave: 0,
   },
   spider: {
+    candle: "kronelys",
     symmetry: 4, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.55, length: 0.9, decay: 0.9,
     gravity: 0.5, outward: 0.9, curl: 0, wiggle: 0.1, loopiness: 0.5,
@@ -105,6 +139,7 @@ export const PRESETS: Record<string, Recipe> = {
     bulb: 0.5, open: 1, cup: 0.35, cupPos: 0.95, dish: 0, rimWave: 0,
   },
   clover: {
+    candle: "telys",
     symmetry: 4, mirror: 0,
     depth: 1, branches: 1, branchSpread: 0.4, length: 1.2, decay: 0.95,
     gravity: 0.12, outward: 0.9, curl: 0.45, wiggle: 0.04, loopiness: 1,
@@ -113,6 +148,7 @@ export const PRESETS: Record<string, Recipe> = {
     bulb: 0.7, open: 0, cup: 0.33, cupPos: 0.75, dish: 0, rimWave: 0,
   },
   pod: {
+    candle: "telys",
     symmetry: 4, mirror: 0,
     depth: 2, branches: 1, branchSpread: 0.3, length: 0.7, decay: 0.9,
     gravity: 0.9, outward: 0.5, curl: 0, wiggle: 0.06, loopiness: 0.3,
@@ -121,6 +157,7 @@ export const PRESETS: Record<string, Recipe> = {
     bulb: 0.4, open: 0.7, cup: 0.3, cupPos: 1, dish: 0, rimWave: 0,
   },
   cage: {
+    candle: "kronelys",
     symmetry: 8, mirror: 0,
     depth: 3, branches: 1, branchSpread: 0.15, length: 0.55, decay: 0.95,
     gravity: 0.9, outward: 0.45, curl: 0, wiggle: 0.04, loopiness: 0.6,
@@ -129,6 +166,7 @@ export const PRESETS: Record<string, Recipe> = {
     bulb: 0.5, open: 0.85, cup: 0.33, cupPos: 0.92, dish: 0, rimWave: 0,
   },
   molecule: {
+    candle: "kronelys",
     symmetry: 5, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.6, length: 0.85, decay: 0.9,
     gravity: 0.65, outward: 0.95, curl: 0.15, wiggle: 0.18, loopiness: 0.2,
@@ -137,6 +175,7 @@ export const PRESETS: Record<string, Recipe> = {
     bulb: 1.2, open: 0, cup: 0.34, cupPos: 0.95, dish: 0, rimWave: 0,
   },
   bloom: {
+    candle: "kronelys",
     symmetry: 3, mirror: 0,
     depth: 3, branches: 2, branchSpread: 0.45, length: 0.8, decay: 0.85,
     gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.7,
@@ -441,14 +480,24 @@ function buildSkeleton(p: HolderParams): Skeleton {
   const yBot = -H / 2
   const r0 = p.tube
 
-  /* ---- the candle interface: cup, socket, optional drip dish ---- */
-  const cupR = p.cup
-  const cupH = 0.16
+  /* ---- the candle interface: cup, socket, optional drip dish ----
+     socket dimensions are real: the chosen candle must drop in and hold */
+  const spec = CANDLE_SPECS[p.candle] ?? CANDLE_SPECS.kronelys
+  const minWall = 4 / MM_PER_UNIT
+  const cupR = Math.max(p.cup, spec.socketR + minWall)
+  const cupH = spec.cupHalfH
   const cupY = Math.min(yBot + p.cupPos * H, yTop - cupH * 0.5)
   sk.central.push({ t: 2, x: 0, y: cupY, z: 0, r: cupR, h: cupH, rd: r0 * 0.45 })
+  // bore from the cup mouth down, leaving a floor under the candle
+  const sockD = Math.min(spec.socketDepth, cupH * 2 - 2.5 / MM_PER_UNIT)
   sk.centralNeg.push({
-    t: 2, x: 0, y: cupY + cupH + 0.05, z: 0,
-    r: cupR * 0.64, h: 0.17, rd: 0.02,
+    t: 2,
+    x: 0,
+    y: cupY + cupH + 0.06 - sockD / 2,
+    z: 0,
+    r: spec.socketR,
+    h: sockD / 2 + 0.06,
+    rd: 0.03,
   })
   if (p.dish > 0.02) {
     sk.central.push({
