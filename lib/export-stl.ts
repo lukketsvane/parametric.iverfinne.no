@@ -18,7 +18,7 @@ export function downloadSTL(params: HolderParams): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `candleholder-${params.family}-${params.seed}.stl`
+  a.download = `candleholder-${params.preset}-${params.seed}.stl`
   document.body.appendChild(a)
   a.click()
   a.remove()

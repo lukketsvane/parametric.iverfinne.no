@@ -2,30 +2,24 @@
 
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
-import { useFrame } from "@react-three/fiber"
 import { buildHolderArrays, type HolderParams } from "@/lib/candle-holder"
 import { arraysToGeometry } from "@/lib/geometry"
 import type { HolderJob, HolderResult } from "@/lib/holder-worker"
 
 // resolution is expressed in cells per tube diameter — the detail that
 // matters. Coarse while dragging, refined once the parameters settle.
-const PREVIEW_CPT = 3.2
-const REFINE_CPT = 6
-const REFINE_CPT_HI = 8
-const REFINE_DELAY = 260
+const PREVIEW_CPT = 3.6
+const REFINE_CPT = 8
+const REFINE_CPT_HI = 11
+const REFINE_DELAY = 240
 
 export function HolderMesh({
   params,
-  playing,
-  speed,
   hiDetail,
 }: {
   params: HolderParams
-  playing: boolean
-  speed: number
   hiDetail: boolean
 }) {
-  const groupRef = useRef<THREE.Group>(null)
   const meshRef = useRef<THREE.Mesh>(null)
 
   const workerRef = useRef<Worker | null>(null)
@@ -39,6 +33,10 @@ export function HolderMesh({
       geo.dispose()
       return
     }
+    // stand the holder on the floor plane at y = 0
+    geo.computeBoundingBox()
+    const bb = geo.boundingBox
+    if (bb) geo.translate(0, -bb.min.y, 0)
     const old = mesh.geometry
     mesh.geometry = geo
     old?.dispose()
@@ -112,24 +110,17 @@ export function HolderMesh({
     return () => mesh?.geometry?.dispose()
   }, [])
 
-  // slow turntable
-  useFrame((_, delta) => {
-    if (!playing || !groupRef.current) return
-    groupRef.current.rotation.y += delta * 0.3 * speed
-  })
-
   return (
-    <group ref={groupRef} position={[0, 0.35, 0]}>
-      <mesh ref={meshRef} castShadow receiveShadow>
-        {/* glazed ceramic: soft off-white body under a wet clearcoat */}
-        <meshPhysicalMaterial
-          color="#e9e5dd"
-          roughness={0.32}
-          metalness={0}
-          clearcoat={0.85}
-          clearcoatRoughness={0.22}
-        />
-      </mesh>
-    </group>
+    <mesh ref={meshRef} castShadow receiveShadow>
+      {/* glazed ceramic: warm off-white body under a wet clearcoat */}
+      <meshPhysicalMaterial
+        color="#f3f0e9"
+        roughness={0.2}
+        metalness={0}
+        clearcoat={1}
+        clearcoatRoughness={0.26}
+        envMapIntensity={1.05}
+      />
+    </mesh>
   )
 }

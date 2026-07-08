@@ -1,72 +1,134 @@
 import { marchGrid, type Grid } from "./marching-cubes"
 
 /**
- * Parametric candle-stick holders.
+ * Parametric candle-stick holders — grown, not modeled.
  *
- * Every form is one implicit solid: a skeleton of tubes, bulbs and cups is
- * expressed as SDF primitives, replicated by n-fold rotational symmetry,
- * merged with smooth (positive) booleans and carved by smooth (negative)
- * booleans — the candle socket and the open tube mouths. Marching cubes then
- * extracts a single watertight organic surface, like slip-cast ceramic.
+ * A seeded branching growth process builds a skeleton of tubes inside one
+ * symmetry wedge: struts grow from the candle cup, droop or lift under
+ * gravity, curl, split, close into loops and end in bulbs or open mouths.
+ * The wedge is replicated by the chosen symmetry group (cyclic or dihedral),
+ * everything is fused with smooth positive booleans and carved with negative
+ * ones (candle socket, tube bores), and marching cubes extracts one
+ * watertight organic surface, like slip-cast ceramic. Every growth and
+ * symmetry decision is exposed as a parameter.
  */
 
-export type Family = "whisk" | "spider" | "clover" | "cage" | "molecule" | "bloom"
-
-export const FAMILIES: Family[] = [
-  "whisk",
-  "spider",
-  "clover",
-  "cage",
-  "molecule",
-  "bloom",
-]
-
 export type HolderParams = {
-  family: Family
+  preset: string
   seed: number
-  /** n-fold rotational symmetry */
+  /* symmetry group */
   symmetry: number
-  /** overall height */
+  /** 0 = cyclic Cn, 1 = dihedral Dn (adds a mirror inside each wedge) */
+  mirror: number
+  /* growth */
+  depth: number
+  branches: number
+  branchSpread: number
+  length: number
+  decay: number
+  gravity: number
+  outward: number
+  curl: number
+  wiggle: number
+  loopiness: number
+  /* body */
   height: number
-  /** outer radius of the skeleton */
   spread: number
-  /** strut radius */
   tube: number
-  /** smooth-union radius — how much the joints melt together */
+  taper: number
   blend: number
-  /** extra size of node bulbs / knobs */
   bulb: number
-  /** how far struts bow away from straight lines */
-  arch: number
-  /** tangential swirl of feet relative to the crown */
-  twist: number
-  /** candle cup outer radius */
-  cup: number
-  /** drip-dish size (bloom) */
-  dish: number
-  /** waviness of the dish rim */
-  rimWave: number
-  /** 0 = closed tube ends, 1 = fully open bores */
   open: number
+  /* the candle interface */
+  cup: number
+  cupPos: number
+  dish: number
+  rimWave: number
 }
 
 export const PARAM_RANGES = {
   symmetry: { min: 3, max: 9, step: 1 },
+  mirror: { min: 0, max: 1, step: 1 },
+  depth: { min: 1, max: 4, step: 1 },
+  branches: { min: 1, max: 3, step: 1 },
+  branchSpread: { min: 0, max: 1, step: 0.02 },
+  length: { min: 0.3, max: 1.2, step: 0.01 },
+  decay: { min: 0.5, max: 1, step: 0.01 },
+  gravity: { min: -1, max: 1, step: 0.02 },
+  outward: { min: 0, max: 1, step: 0.02 },
+  curl: { min: -1, max: 1, step: 0.02 },
+  wiggle: { min: 0, max: 1, step: 0.02 },
+  loopiness: { min: 0, max: 1, step: 0.02 },
   height: { min: 0.7, max: 2.4, step: 0.01 },
   spread: { min: 0.7, max: 2.0, step: 0.01 },
   tube: { min: 0.06, max: 0.17, step: 0.002 },
+  taper: { min: 0, max: 0.6, step: 0.02 },
   blend: { min: 0.04, max: 0.2, step: 0.005 },
   bulb: { min: 0, max: 1.5, step: 0.02 },
-  arch: { min: 0, max: 1, step: 0.02 },
-  twist: { min: -1, max: 1, step: 0.02 },
+  open: { min: 0, max: 1, step: 0.05 },
   cup: { min: 0.24, max: 0.48, step: 0.005 },
+  cupPos: { min: 0.3, max: 1, step: 0.02 },
   dish: { min: 0, max: 1, step: 0.02 },
   rimWave: { min: 0, max: 1, step: 0.02 },
-  open: { min: 0, max: 1, step: 0.05 },
 } as const
 
+export type ParamKey = keyof typeof PARAM_RANGES
+
 /* ------------------------------------------------------------------ */
-/* Seeded parameter generation                                         */
+/* Presets: curated growth settings — starting points, not shapes      */
+/* ------------------------------------------------------------------ */
+
+type Recipe = Omit<HolderParams, "preset" | "seed">
+
+export const PRESETS: Record<string, Recipe> = {
+  whisk: {
+    symmetry: 3, mirror: 0,
+    depth: 2, branches: 2, branchSpread: 0.5, length: 1.1, decay: 0.85,
+    gravity: 0.75, outward: 0.55, curl: 0.1, wiggle: 0.08, loopiness: 1,
+    height: 2.0, spread: 1.1, tube: 0.1, taper: 0.08, blend: 0.09,
+    bulb: 0.25, open: 0, cup: 0.3, cupPos: 0.62, dish: 0, rimWave: 0,
+  },
+  spider: {
+    symmetry: 4, mirror: 0,
+    depth: 2, branches: 2, branchSpread: 0.55, length: 0.9, decay: 0.9,
+    gravity: 0.5, outward: 0.9, curl: 0, wiggle: 0.1, loopiness: 0.6,
+    height: 1.3, spread: 1.5, tube: 0.105, taper: 0.1, blend: 0.09,
+    bulb: 0.5, open: 1, cup: 0.35, cupPos: 0.95, dish: 0, rimWave: 0,
+  },
+  clover: {
+    symmetry: 4, mirror: 1,
+    depth: 2, branches: 1, branchSpread: 0.4, length: 0.9, decay: 0.95,
+    gravity: 0.3, outward: 0.85, curl: 0.8, wiggle: 0.05, loopiness: 0.5,
+    height: 1.15, spread: 1.45, tube: 0.13, taper: 0, blend: 0.09,
+    bulb: 0.7, open: 0, cup: 0.33, cupPos: 0.8, dish: 0, rimWave: 0,
+  },
+  cage: {
+    symmetry: 8, mirror: 0,
+    depth: 3, branches: 1, branchSpread: 0.15, length: 0.55, decay: 0.95,
+    gravity: 0.9, outward: 0.45, curl: 0, wiggle: 0.04, loopiness: 1,
+    height: 1.35, spread: 1.15, tube: 0.085, taper: 0, blend: 0.08,
+    bulb: 0.5, open: 0.85, cup: 0.33, cupPos: 0.92, dish: 0, rimWave: 0,
+  },
+  molecule: {
+    symmetry: 5, mirror: 0,
+    depth: 2, branches: 2, branchSpread: 0.6, length: 0.85, decay: 0.9,
+    gravity: 0.65, outward: 0.95, curl: 0.15, wiggle: 0.18, loopiness: 0.25,
+    height: 1.1, spread: 1.5, tube: 0.095, taper: 0.15, blend: 0.1,
+    bulb: 1.2, open: 0, cup: 0.34, cupPos: 0.95, dish: 0, rimWave: 0,
+  },
+  bloom: {
+    symmetry: 3, mirror: 0,
+    depth: 3, branches: 2, branchSpread: 0.45, length: 0.8, decay: 0.85,
+    gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.85,
+    height: 1.7, spread: 1.3, tube: 0.1, taper: 0.08, blend: 0.09,
+    bulb: 0.35, open: 1, cup: 0.3, cupPos: 1, dish: 0.55, rimWave: 0.55,
+  },
+}
+
+export const FAMILIES = Object.keys(PRESETS)
+
+/* ------------------------------------------------------------------ */
+/* Seeded parameters                                                   */
 /* ------------------------------------------------------------------ */
 
 function mulberry32(seed: number) {
@@ -84,113 +146,33 @@ export function randomSeed(): number {
   return Math.floor(Math.random() * 9000) + 1000
 }
 
-type Recipe = Omit<HolderParams, "family" | "seed">
-
-const RECIPES: Record<Family, (rnd: () => number) => Recipe> = {
-  whisk: (rnd) => ({
-    symmetry: pick(rnd, [3, 3, 4]),
-    height: jit(rnd, 2.0, 0.1),
-    spread: jit(rnd, 1.05, 0.1),
-    tube: jit(rnd, 0.1, 0.08),
-    blend: jit(rnd, 0.09, 0.2),
-    bulb: jit(rnd, 0.3, 0.5),
-    arch: jit(rnd, 0.65, 0.2),
-    twist: (rnd() * 2 - 1) * 0.3,
-    cup: jit(rnd, 0.3, 0.08),
-    dish: 0,
-    rimWave: 0,
-    open: 0,
-  }),
-  spider: (rnd) => ({
-    symmetry: pick(rnd, [4, 4, 5]),
-    height: jit(rnd, 1.3, 0.1),
-    spread: jit(rnd, 1.45, 0.08),
-    tube: jit(rnd, 0.105, 0.08),
-    blend: jit(rnd, 0.09, 0.2),
-    bulb: jit(rnd, 0.45, 0.4),
-    arch: jit(rnd, 0.55, 0.25),
-    twist: (rnd() * 2 - 1) * 0.2,
-    cup: jit(rnd, 0.35, 0.08),
-    dish: 0,
-    rimWave: 0,
-    open: 1,
-  }),
-  clover: (rnd) => ({
-    symmetry: pick(rnd, [3, 4, 4]),
-    height: jit(rnd, 1.0, 0.1),
-    spread: jit(rnd, 1.45, 0.08),
-    tube: jit(rnd, 0.15, 0.06),
-    blend: jit(rnd, 0.11, 0.15),
-    bulb: jit(rnd, 0.7, 0.3),
-    arch: jit(rnd, 0.6, 0.2),
-    twist: (rnd() * 2 - 1) * 0.15,
-    cup: jit(rnd, 0.33, 0.08),
-    dish: 0,
-    rimWave: 0,
-    open: 0,
-  }),
-  cage: (rnd) => ({
-    symmetry: pick(rnd, [7, 8, 8, 9]),
-    height: jit(rnd, 1.35, 0.08),
-    spread: jit(rnd, 1.15, 0.08),
-    tube: jit(rnd, 0.085, 0.08),
-    blend: jit(rnd, 0.08, 0.2),
-    bulb: jit(rnd, 0.5, 0.3),
-    arch: jit(rnd, 0.35, 0.3),
-    twist: 0,
-    cup: jit(rnd, 0.33, 0.08),
-    dish: 0,
-    rimWave: 0,
-    open: jit(rnd, 0.85, 0.15),
-  }),
-  molecule: (rnd) => ({
-    symmetry: pick(rnd, [4, 5, 5, 6]),
-    height: jit(rnd, 1.1, 0.1),
-    spread: jit(rnd, 1.55, 0.08),
-    tube: jit(rnd, 0.095, 0.08),
-    blend: jit(rnd, 0.1, 0.15),
-    bulb: jit(rnd, 0.8, 0.25),
-    arch: jit(rnd, 0.4, 0.3),
-    twist: (rnd() * 2 - 1) * 0.3,
-    cup: jit(rnd, 0.34, 0.08),
-    dish: 0,
-    rimWave: 0,
-    open: 0,
-  }),
-  bloom: (rnd) => ({
-    symmetry: pick(rnd, [3, 3, 4]),
-    height: jit(rnd, 1.7, 0.1),
-    spread: jit(rnd, 1.25, 0.08),
-    tube: jit(rnd, 0.1, 0.08),
-    blend: jit(rnd, 0.09, 0.15),
-    bulb: jit(rnd, 0.35, 0.4),
-    arch: jit(rnd, 0.7, 0.2),
-    twist: (rnd() * 2 - 1) * 0.2,
-    cup: jit(rnd, 0.3, 0.08),
-    dish: jit(rnd, 0.5, 0.3),
-    rimWave: jit(rnd, 0.55, 0.4),
-    open: 1,
-  }),
+function snap(k: ParamKey, v: number): number {
+  const r = PARAM_RANGES[k]
+  let x = Math.min(r.max, Math.max(r.min, v))
+  x = r.step >= 1 ? Math.round(x) : Math.round(x / r.step) * r.step
+  return +x.toFixed(4)
 }
 
-function jit(rnd: () => number, v: number, amt: number) {
-  return v * (1 + (rnd() * 2 - 1) * amt)
-}
-function pick(rnd: () => number, arr: number[]) {
-  return arr[Math.floor(rnd() * arr.length)]
+/** a preset verbatim — the seed only drives the growth randomness */
+export function genParams(seed: number, preset: string): HolderParams {
+  const base = PRESETS[preset] ?? PRESETS.whisk
+  return { preset, seed, ...base }
 }
 
-/** Family recipe + seeded jitter → a full parameter set. */
-export function genParams(seed: number, family: Family): HolderParams {
-  const rnd = mulberry32(seed * 2654435761)
-  const base = RECIPES[family](rnd)
-  for (const k of Object.keys(PARAM_RANGES) as (keyof typeof PARAM_RANGES)[]) {
+/**
+ * Shuffle: wander across the FULL range of every parameter, gently steered
+ * toward the current preset so results stay in-character but surprising.
+ */
+export function randomizeParams(seed: number, preset: string): HolderParams {
+  const rnd = mulberry32((seed * 2654435761 + 0x85ebca6b) >>> 0)
+  const base = { ...(PRESETS[preset] ?? PRESETS.whisk) }
+  const WILD = 0.6 // 0 = preset only, 1 = uniform over the whole range
+  for (const k of Object.keys(PARAM_RANGES) as ParamKey[]) {
     const r = PARAM_RANGES[k]
-    let v = Math.min(r.max, Math.max(r.min, base[k]))
-    v = r.step >= 1 ? Math.round(v) : Math.round(v / r.step) * r.step
-    base[k] = +v.toFixed(4)
+    const uniform = r.min + rnd() * (r.max - r.min)
+    base[k] = snap(k, base[k] + (uniform - base[k]) * WILD)
   }
-  return { family, seed, ...base }
+  return { preset, seed, ...base }
 }
 
 export const DEFAULT_SEED = 7
@@ -213,8 +195,9 @@ type Dish = {
   th: number; curve: number
 }
 /**
- * tube along a polyline: exact distance to the whole path (hard min across
- * segments) so a curved strut reads as one clean tube with no joint bulges
+ * tube along a polyline with per-vertex radius: exact distance to the whole
+ * path (hard min across segments) so a curved, tapering strut reads as one
+ * clean tube with no joint bulges
  */
 type Tube = { t: 4; segs: Float32Array; n: number; r: number }
 
@@ -224,10 +207,11 @@ function sphere(c: V3, r: number): Sphere {
   return { t: 1, x: c[0], y: c[1], z: c[2], r }
 }
 
-/** pack a point path into a Tube prim (7 floats per segment) */
-function tube(pts: V3[], r: number): Tube {
+/** pack a point path into a Tube prim (8 floats per segment, incl. radius) */
+function tube(pts: V3[], r: number | number[]): Tube {
   const n = pts.length - 1
-  const segs = new Float32Array(n * 7)
+  const segs = new Float32Array(n * 8)
+  let rmax = 0
   for (let i = 0; i < n; i++) {
     const a = pts[i]
     const b = pts[i + 1]
@@ -235,7 +219,9 @@ function tube(pts: V3[], r: number): Tube {
     const dy = b[1] - a[1]
     const dz = b[2] - a[2]
     const l2 = dx * dx + dy * dy + dz * dz
-    const o = i * 7
+    const ri = typeof r === "number" ? r : (r[i] + r[i + 1]) / 2
+    rmax = Math.max(rmax, ri)
+    const o = i * 8
     segs[o] = a[0]
     segs[o + 1] = a[1]
     segs[o + 2] = a[2]
@@ -243,8 +229,9 @@ function tube(pts: V3[], r: number): Tube {
     segs[o + 4] = dy
     segs[o + 5] = dz
     segs[o + 6] = l2 > 1e-12 ? 1 / l2 : 0
+    segs[o + 7] = ri
   }
-  return { t: 4, segs, n, r }
+  return { t: 4, segs, n, r: rmax }
 }
 
 function evalPrim(p: Prim, x: number, y: number, z: number): number {
@@ -270,7 +257,6 @@ function evalPrim(p: Prim, x: number, y: number, z: number): number {
       const ang = Math.atan2(z, x)
       const rim = p.r * (1 + p.amp * Math.sin(p.waves * ang + p.phase))
       const nq = q / p.r
-      // plate curls upward toward the rim like a poured dish
       const surf = p.y + p.curve * nq * nq * p.r
       const dv = Math.abs(y - surf) - p.th
       const dr = q - rim
@@ -282,7 +268,7 @@ function evalPrim(p: Prim, x: number, y: number, z: number): number {
     case 4: {
       const s = p.segs
       let best = Infinity
-      for (let i = 0, o = 0; i < p.n; i++, o += 7) {
+      for (let i = 0, o = 0; i < p.n; i++, o += 8) {
         const px = x - s[o]
         const py = y - s[o + 1]
         const pz = z - s[o + 2]
@@ -294,10 +280,10 @@ function evalPrim(p: Prim, x: number, y: number, z: number): number {
         const qx = px - dx * h
         const qy = py - dy * h
         const qz = pz - dz * h
-        const d = qx * qx + qy * qy + qz * qz
+        const d = Math.sqrt(qx * qx + qy * qy + qz * qz) - s[o + 7]
         if (d < best) best = d
       }
-      return Math.sqrt(best) - p.r
+      return best
     }
   }
 }
@@ -320,11 +306,10 @@ function primBound(p: Prim): { x: number; y: number; z: number; br: number } {
       }
     }
     case 4: {
-      // bound over all path points
       let x0 = Infinity, y0 = Infinity, z0 = Infinity
       let x1 = -Infinity, y1 = -Infinity, z1 = -Infinity
       const s = p.segs
-      for (let i = 0, o = 0; i < p.n; i++, o += 7) {
+      for (let i = 0, o = 0; i < p.n; i++, o += 8) {
         for (const [px, py, pz] of [
           [s[o], s[o + 1], s[o + 2]],
           [s[o] + s[o + 3], s[o + 1] + s[o + 4], s[o + 2] + s[o + 5]],
@@ -349,7 +334,7 @@ function smin(a: number, b: number, k: number): number {
 }
 
 /* ------------------------------------------------------------------ */
-/* Path helpers                                                        */
+/* Growth                                                              */
 /* ------------------------------------------------------------------ */
 
 const pol = (r: number, a: number, y: number): V3 => [
@@ -358,7 +343,7 @@ const pol = (r: number, a: number, y: number): V3 => [
   Math.sin(a) * r,
 ]
 
-/** sample a quadratic bezier a→b (control c) as `segs` points, skipping a */
+/** sample a quadratic bezier a→b (control c), including b, excluding a */
 function bez(a: V3, c: V3, b: V3, segs = 10): V3[] {
   const out: V3[] = []
   for (let i = 1; i <= segs; i++) {
@@ -373,61 +358,23 @@ function bez(a: V3, c: V3, b: V3, segs = 10): V3[] {
   return out
 }
 
-/** one smooth tube along a bezier strut */
-function strut(out: Prim[], a: V3, b: V3, ctrl: V3, r: number, segs = 10) {
-  out.push(tube([a, ...bez(a, ctrl, b, segs)], r))
-}
-
-/** horizontal circular arc tube at height y */
-function ringArc(
-  out: Prim[],
-  r: number,
-  y: number,
-  a0: number,
-  a1: number,
-  tr: number,
-  segs = 8,
-) {
-  const pts: V3[] = []
-  for (let i = 0; i <= segs; i++) {
-    pts.push(pol(r, a0 + ((a1 - a0) * i) / segs, y))
-  }
-  out.push(tube(pts, tr))
-}
-
-/* ------------------------------------------------------------------ */
-/* Skeleton construction                                               */
-/* ------------------------------------------------------------------ */
-
 type Skeleton = {
-  /** primitives evaluated once, on the symmetry axis */
   central: Prim[]
   centralNeg: Prim[]
-  /** primitives of one wedge, implicitly repeated n times around Y */
   wedge: Prim[]
   wedgeNeg: Prim[]
 }
 
 /** open tube mouth: bulge the tip into a lip, then bore it out along `dir` */
-function openTip(
-  sk: Skeleton,
-  wedge: boolean,
-  tip: V3,
-  dir: V3,
-  tubeR: number,
-  open: number,
-) {
+function openTip(sk: Skeleton, tip: V3, dir: V3, tubeR: number, open: number) {
   const dl = Math.hypot(dir[0], dir[1], dir[2]) || 1
   const nx = dir[0] / dl
   const ny = dir[1] / dl
   const nz = dir[2] / dl
-  const pos = wedge ? sk.wedge : sk.central
-  pos.push(sphere(tip, tubeR * 1.24))
-  if (open < 0.05) return
-  const neg = wedge ? sk.wedgeNeg : sk.centralNeg
+  sk.wedge.push(sphere(tip, tubeR * 1.24))
   const boreR = tubeR * (0.38 + 0.34 * open)
   const back = tubeR * 0.7
-  neg.push(
+  sk.wedgeNeg.push(
     tube(
       [
         [tip[0] - nx * back, tip[1] - ny * back, tip[2] - nz * back],
@@ -438,6 +385,16 @@ function openTip(
   )
 }
 
+const norm = (v: V3): V3 => {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1
+  return [v[0] / l, v[1] / l, v[2] / l]
+}
+const rotY = (v: V3, a: number): V3 => {
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c]
+}
+
 function buildSkeleton(p: HolderParams): Skeleton {
   const sk: Skeleton = { central: [], centralNeg: [], wedge: [], wedgeNeg: [] }
   const rnd = mulberry32((p.seed ^ 0x9e3779b9) >>> 0)
@@ -445,320 +402,261 @@ function buildSkeleton(p: HolderParams): Skeleton {
 
   const n = Math.round(p.symmetry)
   const s = (Math.PI * 2) / n
-  const m = s / 2 // wedge center angle
+  const m = s / 2
   const R = p.spread
   const H = p.height
   const yTop = H / 2
   const yBot = -H / 2
-  const r = p.tube
-  const bulbR = r * (1.2 + p.bulb * 0.6)
-  const tw = p.twist * s * 0.35
+  const r0 = p.tube
 
-  // ---- candle cup + socket (shared by all families) ----
+  /* ---- the candle interface: cup, socket, optional drip dish ---- */
   const cupR = p.cup
   const cupH = 0.16
-  const addCup = (cy: number) => {
-    sk.central.push({ t: 2, x: 0, y: cy, z: 0, r: cupR, h: cupH, rd: r * 0.45 })
-    // negative: the socket a standard candle drops into
-    sk.centralNeg.push({
-      t: 2,
-      x: 0,
-      y: cy + cupH + 0.05,
-      z: 0,
-      r: cupR * 0.64,
-      h: 0.17,
-      rd: 0.02,
-    })
-  }
-
-  if (p.family === "whisk") {
-    // tall teepee: legs cross at an apex knot, an inner strut per leg opens
-    // an almond loop, the cup rides a floating ring at mid height
-    const apex: V3 = [0, yTop - r * 0.3, 0]
-    sk.central.push(sphere(apex, r * 1.2))
-    const yRing = yBot + H * 0.42
-    const ringR = cupR + 0.26
-    const ground = pol(R * 0.88, m + tw, yBot + r * 1.05)
-    // outer leg: bulges out at the shoulder, lands softly and curls inward
-    sk.wedge.push(
-      tube(
-        [
-          apex,
-          ...bez(
-            apex,
-            pol(R * (1.0 + p.arch * 0.42), m + tw * 0.35, yBot + H * 0.58),
-            ground,
-            16,
-          ),
-          ...bez(ground, pol(R * 0.68, m + tw, yBot + r * 0.75), pol(R * 0.52, m + tw, yBot + r * 1.15), 4),
-        ],
-        r,
-      ),
-    )
-    // inner strut: apex → ring edge → foot, opening an almond loop
-    const ringEdge = pol(ringR, m, yRing)
-    sk.wedge.push(
-      tube(
-        [
-          apex,
-          ...bez(apex, pol(ringR * 0.65, m, yRing + (yTop - yRing) * 0.5), ringEdge, 10),
-          ...bez(
-            ringEdge,
-            pol((ringR + R * 0.88) / 2, m + tw * 0.5, yRing + (yBot - yRing) * 0.55),
-            ground,
-            10,
-          ),
-        ],
-        r * 0.9,
-      ),
-    )
-    // the floating ring, its cup, and a short spoke tying them together
-    ringArc(sk.wedge, ringR, yRing, m - s / 2, m + s / 2, r * 0.78, 8)
-    sk.wedge.push(tube([pol(ringR, m, yRing), pol(cupR * 0.6, m, yRing + 0.03)], r * 0.72))
-    addCup(yRing + cupH * 0.9)
-  } else if (p.family === "spider") {
-    // elevated cup ring; arms fly out to open mouths, legs arch to feet and
-    // a bottom web ties the feet back to a hanging central tube
-    const yCup = yTop - cupH * 0.4
-    addCup(yCup)
-    // wide lip ring around the cup mouth
-    ringArc(sk.central, cupR * 1.05, yCup + cupH * 0.6, 0, Math.PI * 2, r * 0.7, 24)
-    // up-nub between the arms, leaning on the cup wall
-    const nubTip = pol(cupR * 1.3, m + s / 2, yCup + cupH + 0.08)
-    sk.wedge.push(tube([pol(cupR * 0.7, m + s / 2, yCup - cupH * 0.4), nubTip], r * 0.9))
-    sk.wedge.push(sphere(nubTip, bulbR * 0.8))
-    // arm to an open tube mouth
-    const armTip = pol(R, m + tw, yCup - H * 0.3 + jr(0.03))
-    strut(
-      sk.wedge,
-      pol(cupR * 0.85, m, yCup - 0.04),
-      armTip,
-      pol(R * 0.6, m + tw * 0.5, yCup - H * 0.06 + p.arch * 0.1),
-      r,
-    )
-    openTip(sk, true, armTip, [Math.cos(m + tw), -0.35, Math.sin(m + tw)], r, p.open)
-    // leg arching down to the foot
-    const foot = pol(R * 0.68, m + tw * 0.7, yBot + r)
-    strut(
-      sk.wedge,
-      pol(cupR * 0.8, m, yCup - 0.08),
-      foot,
-      pol(R * (0.52 + p.arch * 0.32), m + tw * 0.4, (yCup + yBot) / 2 + jr(0.03)),
-      r,
-      12,
-    )
-    sk.wedge.push(sphere(foot, bulbR * 0.9))
-    // central hanging tube with an open mouth, webbed to each foot
-    const tubeEnd: V3 = [0, yBot + H * 0.22, 0]
-    sk.central.push(tube([[0, yCup - 0.05, 0], tubeEnd], r))
-    openTip(sk, false, tubeEnd, [0, -1, 0], r, p.open)
-    strut(
-      sk.wedge,
-      [Math.cos(m) * r * 0.7, tubeEnd[1] + r * 0.8, Math.sin(m) * r * 0.7],
-      foot,
-      pol(R * 0.34, m + tw * 0.3, yBot + H * 0.05),
-      r * 0.9,
-    )
-  } else if (p.family === "clover") {
-    // squat knot of fat horizontal petal loops around a tall cup
-    const yLoop = yBot + r * 1.35
-    const cupY = yLoop + H * 0.42
-    addCup(cupY)
-    // stem joining cup to the loop layer
-    sk.central.push({
-      t: 2,
-      x: 0,
-      y: (cupY + yLoop) / 2,
-      z: 0,
-      r: cupR * 0.9,
-      h: (cupY - yLoop) / 2 + 0.05,
-      rd: 0.04,
-    })
-    // petal: a fat horizontal circle tube kissing the stem, tilted by arch
-    const ri = cupR * 0.75
-    const rc = (ri + R) / 2
-    const rr = (R - ri) / 2
-    const ux = Math.cos(m + tw)
-    const uz = Math.sin(m + tw)
-    const tilt = 0.12 * p.arch
-    const pts: V3[] = []
-    for (let i = 0; i <= 20; i++) {
-      const t = (i / 20) * Math.PI * 2
-      const along = rc + rr * Math.cos(t)
-      const side = rr * 0.92 * Math.sin(t)
-      pts.push([
-        ux * along - uz * side,
-        yLoop + tilt * (along - ri),
-        uz * along + ux * side,
-      ])
-    }
-    sk.wedge.push(tube(pts, r))
-    // pearls riding the petal shoulders, next to the cup stem
-    const shoulderT = Math.PI * 0.78
-    for (const side of [-1, 1]) {
-      const along = rc + rr * Math.cos(shoulderT)
-      const sideOff = rr * 0.92 * Math.sin(shoulderT) * side
-      const sh: V3 = [
-        ux * along - uz * sideOff,
-        yLoop + tilt * (along - ri),
-        uz * along + ux * sideOff,
-      ]
-      const pearl: V3 = [sh[0] * 1.05, sh[1] + r * 2.2, sh[2] * 1.05]
-      sk.wedge.push(tube([sh, pearl], r * 0.75))
-      sk.wedge.push(sphere(pearl, r * (1.15 + p.bulb * 0.4)))
-    }
-  } else if (p.family === "cage") {
-    const y1 = yTop - H * 0.2 // top ring
-    const y0 = yBot + H * 0.18 // post feet
-    addCup(y1 + 0.1 + cupH * 0.4)
-    // post with a gentle outward bow
-    strut(
-      sk.wedge,
-      pol(R, m, y0),
-      pol(R, m, y1),
-      pol(R * (1 + 0.14 * p.arch), m, (y0 + y1) / 2),
-      r,
-      8,
-    )
-    // knobs: little open tube mouths at both post ends
-    for (const [yy, up] of [
-      [y1, 0.5],
-      [y0, -0.5],
-    ] as const) {
-      const tip = pol(R + r * 3.1, m, yy + up * r * 2.4)
-      sk.wedge.push(tube([pol(R, m, yy), tip], r * 0.85))
-      openTip(sk, true, tip, [Math.cos(m), up * 0.55, Math.sin(m)], r * 0.85, p.open)
-    }
-    // top ring
-    ringArc(sk.wedge, R, y1, m, m + s, r)
-    // bottom rim + V struts leaving teardrop holes between the posts
-    ringArc(sk.wedge, R, yBot + r * 1.3, m - s / 2, m + s / 2, r)
-    for (const side of [-1, 1]) {
-      strut(
-        sk.wedge,
-        pol(R, m, y0 + r * 0.5),
-        pol(R, m + side * s * 0.42, yBot + r * 1.4),
-        pol(R * (1 + 0.05 * p.arch), m + side * s * 0.26, (y0 + yBot) / 2),
-        r * 0.95,
-        6,
-      )
-    }
-    // spoke from the cup out to each post top, with a pearl nub riding it
-    strut(
-      sk.wedge,
-      pol(cupR * 0.8, m, y1 + 0.1),
-      pol(R - r * 0.4, m, y1 + r * 0.3),
-      pol((cupR + R) / 2, m, y1 + 0.1 + p.arch * 0.12),
-      r,
-      6,
-    )
-    const nubBase = pol((cupR + R) * 0.52, m, y1 + 0.08)
-    const nubTip = pol((cupR + R) * 0.52, m, y1 + 0.08 + r * 2.4)
-    sk.wedge.push(tube([nubBase, nubTip], r * 0.8))
-    sk.wedge.push(sphere(nubTip, bulbR * 0.75))
-  } else if (p.family === "molecule") {
-    // flat star of bones with double-ball feet
-    const yCup = yTop - cupH
-    addCup(yCup)
-    sk.central.push({ t: 2, x: 0, y: yCup - cupH, z: 0, r: cupR * 0.8, h: 0.12, rd: 0.04 })
-    const yArm = yCup - cupH - 0.1
-    const knuckle = pol(R * 0.5, m, yArm - H * 0.12)
-    strut(sk.wedge, pol(cupR * 0.7, m, yArm), knuckle, pol(R * 0.28, m, yArm - H * 0.02), r, 6)
-    const footR = r * (1.6 + p.bulb * 0.6)
-    for (const side of [-1, 1]) {
-      const fa = m + side * s * 0.28 + tw
-      const foot = pol(R * 0.9, fa, yBot + footR * 0.8)
-      strut(
-        sk.wedge,
-        knuckle,
-        foot,
-        pol(R * (0.68 + p.arch * 0.14), m + side * s * 0.17 + tw * 0.6, (knuckle[1] + yBot) / 2),
-        r,
-        8,
-      )
-      // dumbbell end: main ball + a smaller one melted beneath it
-      sk.wedge.push(sphere(foot, footR))
-      sk.wedge.push(sphere(pol(R * 1.0, fa + side * 0.04, yBot + footR * 0.45), footR * 0.8))
-    }
-    // pearl on the cup rim
-    sk.wedge.push(
-      sphere(pol(cupR * 1.1, m + s / 2, yCup + cupH * 0.5 + r), r * (1 + p.bulb * 0.35)),
-    )
-  } else {
-    // bloom: wavy drip dish on top of a looped tripod lattice
-    const dishR = cupR * 1.25 + p.dish * (R * 0.8 - cupR)
-    addCup(yTop + 0.03)
+  const cupY = Math.min(yBot + p.cupPos * H, yTop - cupH * 0.5)
+  sk.central.push({ t: 2, x: 0, y: cupY, z: 0, r: cupR, h: cupH, rd: r0 * 0.45 })
+  sk.centralNeg.push({
+    t: 2, x: 0, y: cupY + cupH + 0.05, z: 0,
+    r: cupR * 0.64, h: 0.17, rd: 0.02,
+  })
+  if (p.dish > 0.02) {
     sk.central.push({
       t: 3,
-      y: yTop - 0.04,
-      r: dishR,
+      y: cupY + cupH * 0.3,
+      r: cupR * 1.25 + p.dish * (R * 0.8 - cupR),
       amp: 0.04 + p.rimWave * 0.09,
       waves: 6 + (p.seed % 3),
       phase: rnd() * Math.PI * 2,
-      th: 0.06,
+      th: 0.07,
       curve: 0.2 + p.rimWave * 0.12,
     })
-    // hub under the dish where every loop gathers
-    const hub: V3 = [0, yTop - 0.22, 0]
-    sk.central.push(sphere([0, hub[1], 0], r * 1.1))
-    const b = m + s / 2 // wedge boundary angle
-    const yApex = yBot + H * 0.32
-    const apex = pol(R * 0.52, b, yApex)
-    const foot = pol(R * 0.72, m + tw, yBot + r * 1.2)
-    // teardrop loop: two struts bowing apart, hub → foot
-    for (const side of [-1, 1]) {
-      strut(
-        sk.wedge,
-        [Math.cos(m) * r * 0.6, hub[1], Math.sin(m) * r * 0.6],
-        foot,
-        pol(
-          R * (0.5 + p.arch * 0.3),
-          m + side * s * (0.15 + p.arch * 0.18) + tw * 0.5,
-          (hub[1] + yBot) / 2 + jr(0.03),
-        ),
-        r,
-        12,
-      )
+  }
+
+  /* ---- seeded branching growth inside the wedge ---- */
+  // each lineage accumulates ONE continuous variable-radius path from its
+  // branch point to its tip, so limbs stay clean with no joint bulges
+  type TipState = {
+    pos: V3
+    dir: V3
+    depth: number
+    r: number
+    path: V3[]
+    radii: number[]
+  }
+
+  // every strut endpoint becomes a loop-closure anchor
+  const anchors: V3[] = [[0, cupY - cupH, 0]]
+  const unit = (H + R) / 2
+
+  // a tip can close a ring to its own symmetry copy: with n-fold
+  // replication one arc per wedge becomes a full circle
+  const ringTo = (end: V3, rr: number) => {
+    const er = Math.hypot(end[0], end[2])
+    if (er < 0.15) return
+    const a0 = Math.atan2(end[2], end[0])
+    const pts: V3[] = []
+    for (let i = 0; i <= 6; i++) {
+      pts.push(pol(er, a0 + (s * i) / 6, end[1]))
     }
-    // A-frame arches from the foot up to the boundary apexes
-    strut(
-      sk.wedge,
-      foot,
-      apex,
-      pol(R * (0.66 + 0.08 * p.arch), m + s * 0.26 + tw * 0.5, (yBot + yApex) / 2),
-      r * 0.95,
-      6,
-    )
-    strut(
-      sk.wedge,
-      foot,
-      pol(R * 0.52, m - s / 2, yApex),
-      pol(R * (0.66 + 0.08 * p.arch), m - s * 0.26 + tw * 0.5, (yBot + yApex) / 2),
-      r * 0.95,
-      6,
-    )
-    // open side tube growing out of the apex
-    const sideTip = pol(R * 0.98, b, yApex + r)
-    sk.wedge.push(tube([apex, sideTip], r))
-    openTip(sk, true, sideTip, [Math.cos(b), 0.1, Math.sin(b)], r, p.open)
-    // open foot mouth angled into the ground
-    const footTip = pol(R * 0.9, m + tw, yBot + r * 0.9)
-    sk.wedge.push(tube([foot, footTip], r))
-    openTip(
-      sk,
-      true,
-      footTip,
-      [Math.cos(m + tw) * 0.7, -0.7, Math.sin(m + tw) * 0.7],
-      r,
-      p.open,
-    )
+    sk.wedge.push(tube(pts, rr))
+  }
+
+  // bowed connector: a teardrop/almond loop between two skeleton points.
+  // Loops back to a limb's own root bow INWARD (an inner strut hugging the
+  // axis, like a whisk); loops to other anchors bow outward and open up.
+  const closeLoop = (a: V3, b: V3, rr: number, inward: boolean) => {
+    const dch = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+    const mid: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
+    const mr = Math.hypot(mid[0], mid[2]) || 1
+    const bow = dch * (inward ? -0.3 : 0.36)
+    const ctrl: V3 = [
+      mid[0] + (mid[0] / mr) * bow,
+      mid[1] - p.gravity * dch * (inward ? 0.1 : 0.3) + jr(0.04),
+      mid[2] + (mid[2] / mr) * bow,
+    ]
+    sk.wedge.push(tube([a, ...bez(a, ctrl, b, 10)], rr))
+  }
+
+  // `branches` limbs sprout straight from the cup wall in each wedge
+  const B0 = Math.round(p.branches)
+  let tips: TipState[] = []
+  for (let k = 0; k < B0; k++) {
+    const a0 = m + ((k - (B0 - 1) / 2) * p.branchSpread * s) / Math.max(1, B0 - 1 || 1)
+    const seedPos = pol(cupR * 0.9, a0, cupY - cupH * 0.4)
+    tips.push({
+      pos: seedPos,
+      dir: norm([
+        Math.cos(a0) * (0.4 + p.outward * 0.6),
+        -(0.15 + Math.max(p.gravity, 0) * 0.85) + Math.max(-p.gravity, 0) * 0.7,
+        Math.sin(a0) * (0.4 + p.outward * 0.6),
+      ]),
+      depth: 0,
+      r: r0,
+      path: [seedPos],
+      radii: [r0],
+    })
+  }
+
+  let strutBudget = 48 // hard cap per wedge
+
+  while (tips.length && strutBudget > 0) {
+    const next: TipState[] = []
+    for (const tip of tips) {
+      if (strutBudget-- <= 0) break
+      const L = p.length * Math.pow(p.decay, tip.depth) * unit * 0.55
+
+      // steer: gravity droops (or lifts), outwardness pulls radially,
+      // curl swirls tangentially, wiggle adds seeded noise
+      const radial = norm([tip.pos[0], 0, tip.pos[2]])
+      const tangent: V3 = [-radial[2], 0, radial[0]]
+      let dir = norm([
+        tip.dir[0] +
+          radial[0] * p.outward * 0.45 +
+          tangent[0] * p.curl * 0.5 +
+          jr(p.wiggle * 0.5),
+        tip.dir[1] - p.gravity * 0.55 + jr(p.wiggle * 0.3),
+        tip.dir[2] +
+          radial[2] * p.outward * 0.45 +
+          tangent[2] * p.curl * 0.5 +
+          jr(p.wiggle * 0.5),
+      ])
+
+      let end: V3 = [
+        tip.pos[0] + dir[0] * L,
+        tip.pos[1] + dir[1] * L,
+        tip.pos[2] + dir[2] * L,
+      ]
+
+      // keep growth inside the vertical budget; landing = a foot
+      let grounded = false
+      if (end[1] < yBot + tip.r) {
+        const t = (yBot + tip.r - tip.pos[1]) / (end[1] - tip.pos[1])
+        end = [
+          tip.pos[0] + dir[0] * L * t,
+          yBot + tip.r,
+          tip.pos[2] + dir[2] * L * t,
+        ]
+        grounded = true
+      }
+      if (end[1] > yTop - tip.r) end[1] = yTop - tip.r
+      // keep growth inside the radial budget
+      const er = Math.hypot(end[0], end[2])
+      if (er > R) {
+        end[0] *= R / er
+        end[2] *= R / er
+      }
+
+      // bezier control continues the incoming direction and bows outward
+      // and with gravity → sweeping arcs instead of straight sticks
+      const mr2 = Math.hypot(tip.pos[0] + dir[0] * L * 0.5, tip.pos[2] + dir[2] * L * 0.5) || 1
+      const ctrl: V3 = [
+        tip.pos[0] + tip.dir[0] * L * 0.45 + ((tip.pos[0] + dir[0] * L * 0.5) / mr2) * L * 0.2 * p.outward,
+        tip.pos[1] + tip.dir[1] * L * 0.45 - p.gravity * L * 0.15,
+        tip.pos[2] + tip.dir[2] * L * 0.45 + ((tip.pos[2] + dir[2] * L * 0.5) / mr2) * L * 0.2 * p.outward,
+      ]
+      const rEnd = Math.max(0.05, tip.r * (1 - p.taper * 0.45))
+      const samples = bez(tip.pos, ctrl, end, 10)
+      tip.path.push(...samples)
+      for (let i = 1; i <= samples.length; i++) {
+        tip.radii.push(tip.r + ((rEnd - tip.r) * i) / samples.length)
+      }
+      const strutStart = tip.path[0]
+      anchors.push(end)
+
+      const emit = () => sk.wedge.push(tube(tip.path, tip.radii))
+
+      if (grounded) {
+        emit()
+        // feet: a bulb, optionally an open mouth, and maybe a loop or ring
+        if (rnd() < 0.4 + p.bulb * 0.4) {
+          sk.wedge.push(sphere(end, rEnd * (1.15 + p.bulb * 0.55)))
+        }
+        if (p.open > 0.05 && rnd() < p.open) {
+          openTip(sk, end, [dir[0] * 0.5, -1, dir[2] * 0.5], rEnd, p.open)
+        }
+        const roll = rnd()
+        if (roll < p.loopiness * 0.5) {
+          closeLoop(end, strutStart, rEnd * 0.95, true)
+        } else if (roll < p.loopiness) {
+          ringTo(end, rEnd * 0.9)
+        }
+        continue
+      }
+
+      const canBranch = tip.depth + 1 < Math.round(p.depth)
+      if (canBranch) {
+        const B = Math.round(p.branches)
+        if (B === 1) {
+          // no split: the limb keeps growing as one continuous path
+          next.push({
+            pos: end,
+            dir,
+            depth: tip.depth + 1,
+            r: rEnd,
+            path: tip.path,
+            radii: tip.radii,
+          })
+          continue
+        }
+        emit()
+        for (let k = 0; k < B; k++) {
+          const off = (k - (B - 1) / 2) * p.branchSpread * s * 1.2
+          next.push({
+            pos: end,
+            dir: norm(rotY(dir, off + jr(p.wiggle * 0.3))),
+            depth: tip.depth + 1,
+            r: rEnd,
+            path: [end],
+            radii: [rEnd],
+          })
+        }
+        // a node bulb marks the split; sometimes a ring passes through it
+        if (rnd() < p.bulb * 0.5) {
+          sk.wedge.push(sphere(end, rEnd * (1.1 + p.bulb * 0.5)))
+        }
+        if (rnd() < p.loopiness * 0.4) {
+          ringTo(end, rEnd * 0.85)
+        }
+        continue
+      }
+
+      emit()
+      // terminal tip: close a loop, ring the axis, open a mouth, grow a pearl
+      const roll = rnd()
+      if (roll < p.loopiness * 0.55) {
+        // teardrop back to this limb's own root, or to the nearest anchor —
+        // neighbor-wedge copies included so loops cross sector boundaries
+        let best: V3 = strutStart
+        let bestD = Math.hypot(
+          strutStart[0] - end[0],
+          strutStart[1] - end[1],
+          strutStart[2] - end[2],
+        )
+        for (const a of anchors) {
+          for (const cand of [a, rotY(a, s), rotY(a, -s)] as V3[]) {
+            const d = Math.hypot(cand[0] - end[0], cand[1] - end[1], cand[2] - end[2])
+            if (d > L * 0.35 && d < bestD) {
+              bestD = d
+              best = cand
+            }
+          }
+        }
+        closeLoop(end, best, rEnd * 0.95, best === strutStart)
+      } else if (roll < p.loopiness) {
+        ringTo(end, rEnd * 0.9)
+      } else if (p.open > 0.05 && rnd() < p.open) {
+        openTip(sk, end, dir, rEnd, p.open)
+      } else {
+        sk.wedge.push(sphere(end, rEnd * (1.05 + p.bulb * 0.6)))
+      }
+    }
+    tips = next
   }
 
   return sk
 }
 
 /* ------------------------------------------------------------------ */
-/* Field evaluation with rotational-symmetry folding                   */
+/* Field evaluation with symmetry-group folding                        */
 /* ------------------------------------------------------------------ */
 
 type BoundedPrim = { prim: Prim; bx: number; by: number; bz: number; br: number }
@@ -784,6 +682,7 @@ export function makeField(p: HolderParams): Field {
 
   const n = Math.round(p.symmetry)
   const sector = (Math.PI * 2) / n
+  const mirror = p.mirror >= 0.5
   const k = p.blend
   const kNeg = Math.min(0.05, k * 0.5) + 0.015
 
@@ -802,7 +701,6 @@ export function makeField(p: HolderParams): Field {
     max: [maxR + margin, yMax + margin, maxR + margin] as V3,
   }
 
-  // evaluate one primitive list at (x,y,z), smooth-unioned into d
   const accum = (
     list: BoundedPrim[],
     x: number,
@@ -823,12 +721,19 @@ export function makeField(p: HolderParams): Field {
     return d
   }
 
-  const evalAt = (x: number, y: number, z: number): number => {
-    let d = accum(central, x, y, z, 1e9, k)
-
-    // fold the point into the canonical wedge and its two neighbors so
-    // primitives spanning a sector boundary still blend seamlessly
-    const theta = Math.atan2(z, x)
+  // fold the point into the canonical wedge and its two neighbors so
+  // primitives spanning a sector boundary still blend seamlessly; for the
+  // dihedral group each candidate is also evaluated mirrored across the
+  // wedge center plane
+  const foldAccum = (
+    list: BoundedPrim[],
+    x: number,
+    y: number,
+    z: number,
+    d: number,
+    kk: number,
+    theta: number,
+  ) => {
     const kf = Math.floor(theta / sector)
     for (let o = -1; o <= 1; o++) {
       const a = (kf + o) * sector
@@ -836,20 +741,26 @@ export function makeField(p: HolderParams): Field {
       const sa = Math.sin(a)
       const xr = x * ca + z * sa
       const zr = -x * sa + z * ca
-      d = accum(wedge, xr, y, zr, d, k)
+      d = accum(list, xr, y, zr, d, kk)
+      if (mirror) {
+        // reflect across the wedge center plane θ = sector/2
+        const a2 = Math.atan2(zr, xr)
+        const rr = Math.hypot(xr, zr)
+        const am = sector - a2
+        d = accum(list, Math.cos(am) * rr, y, Math.sin(am) * rr, d, kk)
+      }
     }
+    return d
+  }
+
+  const evalAt = (x: number, y: number, z: number): number => {
+    const theta = Math.atan2(z, x)
+    let d = accum(central, x, y, z, 1e9, k)
+    d = foldAccum(wedge, x, y, z, d, k, theta)
 
     if (centralNeg.length || wedgeNeg.length) {
       let dn = accum(centralNeg, x, y, z, 1e9, kNeg)
-      for (let o = -1; o <= 1; o++) {
-        const a = (kf + o) * sector
-        const ca = Math.cos(a)
-        const sa = Math.sin(a)
-        const xr = x * ca + z * sa
-        const zr = -x * sa + z * ca
-        dn = accum(wedgeNeg, xr, y, zr, dn, kNeg)
-      }
-      // smooth subtraction: carve the bores out of the solid
+      dn = foldAccum(wedgeNeg, x, y, z, dn, kNeg, theta)
       d = -smin(-d, dn, kNeg)
     }
 
@@ -878,7 +789,7 @@ export type HolderMeshArrays = {
 export function buildHolderArrays(
   p: HolderParams,
   cellsPerTube: number,
-  maxDim = 240,
+  maxDim = 280,
 ): HolderMeshArrays {
   const field = makeField(p)
   const [x0, y0, z0] = field.bounds.min
