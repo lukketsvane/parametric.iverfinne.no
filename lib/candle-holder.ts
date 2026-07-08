@@ -31,7 +31,12 @@ export type HolderParams = {
   curl: number
   wiggle: number
   loopiness: number
+  /** probability that tips and branch nodes ring the axis */
+  rings: number
   /* body */
+  /** 0 = open lattice, towards 1 = a hollow shell grown around the body,
+      pierced by one window per wedge that shrinks as the shell closes */
+  shell: number
   height: number
   spread: number
   tube: number
@@ -59,6 +64,8 @@ export const PARAM_RANGES = {
   curl: { min: -1, max: 1, step: 0.02 },
   wiggle: { min: 0, max: 1, step: 0.02 },
   loopiness: { min: 0, max: 1, step: 0.02 },
+  rings: { min: 0, max: 1, step: 0.02 },
+  shell: { min: 0, max: 1, step: 0.02 },
   height: { min: 0.7, max: 2.4, step: 0.01 },
   spread: { min: 0.7, max: 2.0, step: 0.01 },
   tube: { min: 0.06, max: 0.17, step: 0.002 },
@@ -84,42 +91,56 @@ export const PRESETS: Record<string, Recipe> = {
   whisk: {
     symmetry: 3, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.5, length: 1.1, decay: 0.85,
-    gravity: 0.75, outward: 0.55, curl: 0.1, wiggle: 0.08, loopiness: 1,
+    gravity: 0.75, outward: 0.55, curl: 0.1, wiggle: 0.08, loopiness: 0.9,
+    rings: 0.6, shell: 0,
     height: 2.0, spread: 1.1, tube: 0.1, taper: 0.08, blend: 0.09,
     bulb: 0.25, open: 0, cup: 0.3, cupPos: 0.62, dish: 0, rimWave: 0,
   },
   spider: {
     symmetry: 4, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.55, length: 0.9, decay: 0.9,
-    gravity: 0.5, outward: 0.9, curl: 0, wiggle: 0.1, loopiness: 0.6,
+    gravity: 0.5, outward: 0.9, curl: 0, wiggle: 0.1, loopiness: 0.5,
+    rings: 0.35, shell: 0,
     height: 1.3, spread: 1.5, tube: 0.105, taper: 0.1, blend: 0.09,
     bulb: 0.5, open: 1, cup: 0.35, cupPos: 0.95, dish: 0, rimWave: 0,
   },
   clover: {
-    symmetry: 4, mirror: 1,
-    depth: 2, branches: 1, branchSpread: 0.4, length: 0.9, decay: 0.95,
-    gravity: 0.3, outward: 0.85, curl: 0.8, wiggle: 0.05, loopiness: 0.5,
-    height: 1.15, spread: 1.45, tube: 0.13, taper: 0, blend: 0.09,
-    bulb: 0.7, open: 0, cup: 0.33, cupPos: 0.8, dish: 0, rimWave: 0,
+    symmetry: 4, mirror: 0,
+    depth: 1, branches: 1, branchSpread: 0.4, length: 1.2, decay: 0.95,
+    gravity: 0.12, outward: 0.9, curl: 0.45, wiggle: 0.04, loopiness: 1,
+    rings: 0, shell: 0,
+    height: 1.05, spread: 1.4, tube: 0.135, taper: 0, blend: 0.08,
+    bulb: 0.7, open: 0, cup: 0.33, cupPos: 0.75, dish: 0, rimWave: 0,
+  },
+  pod: {
+    symmetry: 4, mirror: 0,
+    depth: 2, branches: 1, branchSpread: 0.3, length: 0.7, decay: 0.9,
+    gravity: 0.9, outward: 0.5, curl: 0, wiggle: 0.06, loopiness: 0.3,
+    rings: 0.5, shell: 0.75,
+    height: 1.35, spread: 1.1, tube: 0.1, taper: 0, blend: 0.08,
+    bulb: 0.4, open: 0.7, cup: 0.3, cupPos: 1, dish: 0, rimWave: 0,
   },
   cage: {
     symmetry: 8, mirror: 0,
     depth: 3, branches: 1, branchSpread: 0.15, length: 0.55, decay: 0.95,
-    gravity: 0.9, outward: 0.45, curl: 0, wiggle: 0.04, loopiness: 1,
+    gravity: 0.9, outward: 0.45, curl: 0, wiggle: 0.04, loopiness: 0.6,
+    rings: 0.9, shell: 0,
     height: 1.35, spread: 1.15, tube: 0.085, taper: 0, blend: 0.08,
     bulb: 0.5, open: 0.85, cup: 0.33, cupPos: 0.92, dish: 0, rimWave: 0,
   },
   molecule: {
     symmetry: 5, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.6, length: 0.85, decay: 0.9,
-    gravity: 0.65, outward: 0.95, curl: 0.15, wiggle: 0.18, loopiness: 0.25,
+    gravity: 0.65, outward: 0.95, curl: 0.15, wiggle: 0.18, loopiness: 0.2,
+    rings: 0.15, shell: 0,
     height: 1.1, spread: 1.5, tube: 0.095, taper: 0.15, blend: 0.1,
     bulb: 1.2, open: 0, cup: 0.34, cupPos: 0.95, dish: 0, rimWave: 0,
   },
   bloom: {
     symmetry: 3, mirror: 0,
     depth: 3, branches: 2, branchSpread: 0.45, length: 0.8, decay: 0.85,
-    gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.85,
+    gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.7,
+    rings: 0.7, shell: 0,
     height: 1.7, spread: 1.3, tube: 0.1, taper: 0.08, blend: 0.09,
     bulb: 0.35, open: 1, cup: 0.3, cupPos: 1, dish: 0.55, rimWave: 0.55,
   },
@@ -200,8 +221,10 @@ type Dish = {
  * clean tube with no joint bulges
  */
 type Tube = { t: 4; segs: Float32Array; n: number; r: number }
+/** axis-aligned ellipsoid of revolution (rx = rz), approximate SDF */
+type Ellipsoid = { t: 5; x: number; y: number; z: number; rx: number; ry: number }
 
-type Prim = Sphere | Cylinder | Dish | Tube
+type Prim = Sphere | Cylinder | Dish | Tube | Ellipsoid
 
 function sphere(c: V3, r: number): Sphere {
   return { t: 1, x: c[0], y: c[1], z: c[2], r }
@@ -285,6 +308,13 @@ function evalPrim(p: Prim, x: number, y: number, z: number): number {
       }
       return best
     }
+    case 5: {
+      const px = (x - p.x) / p.rx
+      const py = (y - p.y) / p.ry
+      const pz = (z - p.z) / p.rx
+      const k = Math.sqrt(px * px + py * py + pz * pz)
+      return (k - 1) * Math.min(p.rx, p.ry)
+    }
   }
 }
 
@@ -325,6 +355,8 @@ function primBound(p: Prim): { x: number; y: number; z: number; br: number } {
       const br = Math.hypot(x1 - cx, y1 - cy, z1 - cz) + p.r
       return { x: cx, y: cy, z: cz, br }
     }
+    case 5:
+      return { x: p.x, y: p.y, z: p.z, br: Math.max(p.rx, p.ry) }
   }
 }
 
@@ -461,18 +493,35 @@ function buildSkeleton(p: HolderParams): Skeleton {
   }
 
   // bowed connector: a teardrop/almond loop between two skeleton points.
-  // Loops back to a limb's own root bow INWARD (an inner strut hugging the
-  // axis, like a whisk); loops to other anchors bow outward and open up.
-  const closeLoop = (a: V3, b: V3, rr: number, inward: boolean) => {
+  // When closing back to the limb's own root the connector bows away from
+  // the limb's midpoint, guaranteeing an open eye instead of hugging it.
+  const closeLoop = (a: V3, b: V3, rr: number, awayFrom?: V3) => {
     const dch = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
     const mid: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
-    const mr = Math.hypot(mid[0], mid[2]) || 1
-    const bow = dch * (inward ? -0.3 : 0.36)
-    const ctrl: V3 = [
-      mid[0] + (mid[0] / mr) * bow,
-      mid[1] - p.gravity * dch * (inward ? 0.1 : 0.3) + jr(0.04),
-      mid[2] + (mid[2] / mr) * bow,
-    ]
+    let ctrl: V3
+    if (awayFrom) {
+      // bow sideways, perpendicular to the chord, on the side facing away
+      // from the limb — the eye must clear it by more than a tube diameter
+      let px = -(b[2] - a[2])
+      let pz = b[0] - a[0]
+      const pl = Math.hypot(px, pz) || 1
+      px /= pl
+      pz /= pl
+      if (px * (mid[0] - awayFrom[0]) + pz * (mid[2] - awayFrom[2]) < 0) {
+        px = -px
+        pz = -pz
+      }
+      const push = Math.max(dch * 0.5, rr * 6)
+      ctrl = [mid[0] + px * push, mid[1] + jr(0.03), mid[2] + pz * push]
+    } else {
+      const mr = Math.hypot(mid[0], mid[2]) || 1
+      const bow = dch * 0.36
+      ctrl = [
+        mid[0] + (mid[0] / mr) * bow,
+        mid[1] - p.gravity * dch * 0.3 + jr(0.04),
+        mid[2] + (mid[2] / mr) * bow,
+      ]
+    }
     sk.wedge.push(tube([a, ...bez(a, ctrl, b, 10)], rr))
   }
 
@@ -573,10 +622,10 @@ function buildSkeleton(p: HolderParams): Skeleton {
         if (p.open > 0.05 && rnd() < p.open) {
           openTip(sk, end, [dir[0] * 0.5, -1, dir[2] * 0.5], rEnd, p.open)
         }
-        const roll = rnd()
-        if (roll < p.loopiness * 0.5) {
-          closeLoop(end, strutStart, rEnd * 0.95, true)
-        } else if (roll < p.loopiness) {
+        if (rnd() < p.loopiness * 0.7) {
+          closeLoop(end, strutStart, rEnd * 0.95, tip.path[tip.path.length >> 1])
+        }
+        if (rnd() < p.rings * 0.7) {
           ringTo(end, rEnd * 0.9)
         }
         continue
@@ -613,7 +662,7 @@ function buildSkeleton(p: HolderParams): Skeleton {
         if (rnd() < p.bulb * 0.5) {
           sk.wedge.push(sphere(end, rEnd * (1.1 + p.bulb * 0.5)))
         }
-        if (rnd() < p.loopiness * 0.4) {
+        if (rnd() < p.rings * 0.6) {
           ringTo(end, rEnd * 0.85)
         }
         continue
@@ -622,7 +671,7 @@ function buildSkeleton(p: HolderParams): Skeleton {
       emit()
       // terminal tip: close a loop, ring the axis, open a mouth, grow a pearl
       const roll = rnd()
-      if (roll < p.loopiness * 0.55) {
+      if (roll < p.loopiness) {
         // teardrop back to this limb's own root, or to the nearest anchor —
         // neighbor-wedge copies included so loops cross sector boundaries
         let best: V3 = strutStart
@@ -640,8 +689,13 @@ function buildSkeleton(p: HolderParams): Skeleton {
             }
           }
         }
-        closeLoop(end, best, rEnd * 0.95, best === strutStart)
-      } else if (roll < p.loopiness) {
+        closeLoop(
+          end,
+          best,
+          rEnd * 0.95,
+          best === strutStart ? tip.path[tip.path.length >> 1] : undefined,
+        )
+      } else if (rnd() < p.rings) {
         ringTo(end, rEnd * 0.9)
       } else if (p.open > 0.05 && rnd() < p.open) {
         openTip(sk, end, dir, rEnd, p.open)
@@ -650,6 +704,35 @@ function buildSkeleton(p: HolderParams): Skeleton {
       }
     }
     tips = next
+  }
+
+  /* ---- optional shell: a hollow skin grown around the body ---- */
+  if (p.shell > 0.1) {
+    const wall = r0 * 1.7
+    const rx = R * 0.8
+    const yLo = yBot + r0
+    const yHi = cupY + cupH * 0.5
+    const cy = (yLo + yHi) / 2
+    const ry = (yHi - yLo) / 2 + wall
+    sk.central.push({ t: 5, x: 0, y: cy, z: 0, rx, ry })
+    sk.centralNeg.push({ t: 5, x: 0, y: cy, z: 0, rx: rx - wall, ry: ry - wall })
+    // one window per wedge, shrinking as the shell closes up
+    const winW = rx * s * (0.42 - 0.3 * p.shell)
+    if (winW > wall * 0.4) {
+      sk.wedgeNeg.push(
+        tube(
+          [pol(rx * 0.94, m, cy - ry * 0.35), pol(rx * 0.94, m, cy + ry * 0.3)],
+          winW,
+        ),
+      )
+    }
+    // punch holes through the ribs between the windows
+    if (p.open > 0.05) {
+      const b = m + s / 2
+      const punchR = r0 * (0.55 + 0.45 * p.open)
+      sk.wedgeNeg.push(tube([pol(rx * 0.2, b, cy - ry * 0.55), pol(rx * 1.3, b, cy - ry * 0.48)], punchR))
+      sk.wedgeNeg.push(tube([pol(rx * 0.15, b, cy + ry * 0.5), pol(rx * 1.25, b, cy + ry * 0.58)], punchR * 0.7))
+    }
   }
 
   return sk
@@ -818,9 +901,10 @@ export function buildHolderArrays(
   const grid: Grid = { nx, ny, nz, ox: x0, oy: y0, oz: z0, cell, field: values }
   const { positions, indices } = marchGrid(grid)
 
-  // normals from the field gradient (central differences)
+  // normals from the field gradient (central differences); the wider stencil
+  // softens shading over creases like the dish rim
   const normals = new Float32Array(positions.length)
-  const eps = cell * 0.6
+  const eps = cell * 0.9
   for (let v = 0; v < positions.length; v += 3) {
     const x = positions[v]
     const y = positions[v + 1]
