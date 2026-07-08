@@ -1,39 +1,61 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import {
-  Shuffle,
-  SlidersHorizontal,
-  ChevronDown,
-  Play,
-  Pause,
-  Download,
-} from "lucide-react"
+import { useState } from "react"
+import { Shuffle, SlidersHorizontal, ChevronDown, Download } from "lucide-react"
 import {
   FAMILIES,
   PARAM_RANGES,
   genParams,
+  randomizeParams,
   randomSeed,
-  type Family,
+  type ParamKey,
   type HolderParams,
 } from "@/lib/candle-holder"
 import { downloadSTL } from "@/lib/export-stl"
 
-type Key = keyof typeof PARAM_RANGES
+type Section = { title: string; keys: { key: ParamKey; label: string }[] }
 
-const SLIDERS: { key: Key; label: string; bloomOnly?: boolean }[] = [
-  { key: "symmetry", label: "Symmetry" },
-  { key: "spread", label: "Spread" },
-  { key: "height", label: "Height" },
-  { key: "tube", label: "Tube" },
-  { key: "blend", label: "Blend" },
-  { key: "bulb", label: "Bulbs" },
-  { key: "arch", label: "Arch" },
-  { key: "twist", label: "Twist" },
-  { key: "cup", label: "Cup" },
-  { key: "open", label: "Open" },
-  { key: "dish", label: "Dish", bloomOnly: true },
-  { key: "rimWave", label: "Rim", bloomOnly: true },
+const SECTIONS: Section[] = [
+  {
+    title: "Symmetry",
+    keys: [{ key: "symmetry", label: "Order" }],
+  },
+  {
+    title: "Growth",
+    keys: [
+      { key: "depth", label: "Depth" },
+      { key: "branches", label: "Branches" },
+      { key: "branchSpread", label: "Spread" },
+      { key: "length", label: "Length" },
+      { key: "decay", label: "Decay" },
+      { key: "gravity", label: "Gravity" },
+      { key: "outward", label: "Outward" },
+      { key: "curl", label: "Curl" },
+      { key: "wiggle", label: "Wiggle" },
+      { key: "loopiness", label: "Loops" },
+    ],
+  },
+  {
+    title: "Body",
+    keys: [
+      { key: "height", label: "Height" },
+      { key: "spread", label: "Radius" },
+      { key: "tube", label: "Tube" },
+      { key: "taper", label: "Taper" },
+      { key: "blend", label: "Blend" },
+      { key: "bulb", label: "Bulbs" },
+      { key: "open", label: "Open" },
+    ],
+  },
+  {
+    title: "Cup",
+    keys: [
+      { key: "cup", label: "Cup" },
+      { key: "cupPos", label: "Height" },
+      { key: "dish", label: "Dish" },
+      { key: "rimWave", label: "Rim" },
+    ],
+  },
 ]
 
 // monochrome controls — solid black/white ink, thin subtle hairline outlines
@@ -86,51 +108,20 @@ function Row({
 
 export function ControlsPanel({
   params,
-  playing,
-  speed,
   isDesktop,
   hiDetail,
   onToggleDetail,
-  onTogglePlay,
-  onToggleSpeed,
   onChange,
 }: {
   params: HolderParams
-  playing: boolean
-  speed: number
   isDesktop: boolean
   hiDetail: boolean
   onToggleDetail: () => void
-  onTogglePlay: () => void
-  onToggleSpeed: () => void
   onChange: (p: HolderParams) => void
 }) {
   const [open, setOpen] = useState(false)
 
-  // one tap on the play button toggles play/pause; a double tap toggles 2x
-  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => {
-    if (tapTimer.current) clearTimeout(tapTimer.current)
-  }, [])
-  const handlePlayTap = () => {
-    if (tapTimer.current) {
-      clearTimeout(tapTimer.current)
-      tapTimer.current = null
-      onToggleSpeed()
-    } else {
-      tapTimer.current = setTimeout(() => {
-        tapTimer.current = null
-        onTogglePlay()
-      }, 240)
-    }
-  }
-
   const set = (patch: Partial<HolderParams>) => onChange({ ...params, ...patch })
-  const setFamily = (family: Family) => onChange(genParams(params.seed, family))
-
-  const sliders = SLIDERS.filter(
-    (s) => !s.bloomOnly || params.family === "bloom",
-  )
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
@@ -138,30 +129,13 @@ export function ControlsPanel({
         {/* header row */}
         <div className="flex items-center gap-1.5 p-2.5">
           <span className="px-1.5 text-[11px] uppercase tracking-widest text-black/60 dark:text-white/60">
-            {params.family} · {params.seed}
+            {params.preset} · {params.seed}
           </span>
 
           <div className="flex-1" />
 
           <button
-            onClick={handlePlayTap}
-            aria-label={playing ? "Pause turntable" : "Spin turntable"}
-            title="Tap: play / pause · Double-tap: 2× speed"
-            className={`relative ${ICON_BTN}`}
-          >
-            {playing ? (
-              <Pause className="h-4 w-4" strokeWidth={2.2} />
-            ) : (
-              <Play className="h-4 w-4" strokeWidth={2.2} />
-            )}
-            {speed === 2 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-black px-1 text-[9px] font-bold leading-none text-white dark:bg-white dark:text-black">
-                2×
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => onChange(genParams(randomSeed(), params.family))}
+            onClick={() => onChange(randomizeParams(randomSeed(), params.preset))}
             aria-label="Randomize holder"
             className={ICON_BTN_SOLID}
           >
@@ -191,17 +165,33 @@ export function ControlsPanel({
 
         {/* expandable body */}
         {open && (
-          <div className="max-h-[52vh] overflow-y-auto px-4 pb-4">
-            <div className="mb-3 flex flex-wrap gap-1.5">
+          <div className="max-h-[56vh] overflow-y-auto px-4 pb-4">
+            <div className="mb-2 flex flex-wrap gap-1.5">
               {FAMILIES.map((fam) => (
                 <button
                   key={fam}
-                  onClick={() => setFamily(fam)}
-                  className={chipClass(params.family === fam)}
+                  onClick={() => onChange(genParams(params.seed, fam))}
+                  className={chipClass(params.preset === fam)}
                 >
                   {fam}
                 </button>
               ))}
+            </div>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => set({ mirror: params.mirror >= 0.5 ? 0 : 1 })}
+                className={chipClass(params.mirror >= 0.5)}
+                title="Dihedral symmetry: mirror each wedge"
+              >
+                mirror
+              </button>
+              <button
+                onClick={() => set({ seed: randomSeed() })}
+                className={chipClass(false)}
+                title="New growth seed, same parameters"
+              >
+                reseed
+              </button>
             </div>
 
             {isDesktop && (
@@ -230,18 +220,25 @@ export function ControlsPanel({
               </button>
             )}
 
-            {sliders.map(({ key, label }) => (
-              <Row
-                key={key}
-                label={label}
-                value={params[key]}
-                range={PARAM_RANGES[key]}
-                onChange={(v) => set({ [key]: v } as Partial<HolderParams>)}
-              />
+            {SECTIONS.map(({ title, keys }) => (
+              <div key={title} className="mb-2">
+                <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
+                  {title}
+                </p>
+                {keys.map(({ key, label }) => (
+                  <Row
+                    key={key}
+                    label={label}
+                    value={params[key]}
+                    range={PARAM_RANGES[key]}
+                    onChange={(v) => set({ [key]: v } as Partial<HolderParams>)}
+                  />
+                ))}
+              </div>
             ))}
 
             <p className="pt-2 text-center text-[10px] uppercase tracking-widest text-black/60 dark:text-white/60">
-              symmetries · booleans · lattices
+              grown from symmetries · booleans · lattices
             </p>
           </div>
         )}

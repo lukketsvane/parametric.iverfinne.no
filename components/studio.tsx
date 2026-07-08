@@ -33,8 +33,6 @@ function useIsDesktop() {
 
 export function Studio() {
   const [params, setParams] = useState<HolderParams>(DEFAULT_PARAMS)
-  const [playing, setPlaying] = useState(true)
-  const [speed, setSpeed] = useState(1)
   const [hiDetail, setHiDetail] = useState(false)
   const [mounted, setMounted] = useState(false)
   const dark = useSystemDark()
@@ -50,13 +48,7 @@ export function Studio() {
     <main className="fixed inset-0 overflow-hidden bg-white dark:bg-black">
       <div className="absolute inset-0">
         {mounted && (
-          <HolderViewer
-            params={params}
-            playing={playing}
-            speed={playing ? speed : 1}
-            dark={dark}
-            hiDetail={detailOn}
-          />
+          <HolderViewer params={params} dark={dark} hiDetail={detailOn} />
         )}
       </div>
 
@@ -73,13 +65,9 @@ export function Studio() {
 
       <ControlsPanel
         params={params}
-        playing={playing}
-        speed={speed}
         isDesktop={isDesktop}
         hiDetail={hiDetail}
         onToggleDetail={() => setHiDetail((d) => !d)}
-        onTogglePlay={() => setPlaying((p) => !p)}
-        onToggleSpeed={() => setSpeed((s) => (s === 1 ? 2 : 1))}
         onChange={setParams}
       />
     </main>
