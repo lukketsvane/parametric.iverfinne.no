@@ -48,7 +48,12 @@ export function Studio() {
     <main className="fixed inset-0 overflow-hidden bg-white dark:bg-black">
       <div className="absolute inset-0">
         {mounted && (
-          <HolderViewer params={params} dark={dark} hiDetail={detailOn} />
+          <HolderViewer
+            params={params}
+            dark={dark}
+            hiDetail={detailOn}
+            mobile={!isDesktop}
+          />
         )}
       </div>
 

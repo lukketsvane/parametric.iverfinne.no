@@ -65,6 +65,9 @@ export type HolderParams = {
   loopiness: number
   /** probability that tips and branch nodes ring the axis */
   rings: number
+  /** crown: a ring around the cup mouth that limbs grow from, with bored
+      mouths at its corners when open ends are on. 0 = none, 1 = wide */
+  crown: number
   /* body */
   /** 0 = open lattice, towards 1 = a hollow shell grown around the body,
       pierced by one window per wedge that shrinks as the shell closes */
@@ -97,6 +100,7 @@ export const PARAM_RANGES = {
   wiggle: { min: 0, max: 1, step: 0.02 },
   loopiness: { min: 0, max: 1, step: 0.02 },
   rings: { min: 0, max: 1, step: 0.02 },
+  crown: { min: 0, max: 1, step: 0.02 },
   shell: { min: 0, max: 1, step: 0.02 },
   height: { min: 0.7, max: 2.4, step: 0.01 },
   spread: { min: 0.7, max: 2.0, step: 0.01 },
@@ -125,7 +129,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 3, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.5, length: 1.1, decay: 0.85,
     gravity: 0.75, outward: 0.55, curl: 0.1, wiggle: 0.08, loopiness: 0.9,
-    rings: 0.6, shell: 0,
+    rings: 0.6, crown: 0, shell: 0,
     height: 2.0, spread: 1.1, tube: 0.1, taper: 0.08, blend: 0.09,
     bulb: 0.25, open: 0, cup: 0.3, cupPos: 0.62, dish: 0, rimWave: 0,
   },
@@ -134,7 +138,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 4, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.55, length: 0.9, decay: 0.9,
     gravity: 0.5, outward: 0.9, curl: 0, wiggle: 0.1, loopiness: 0.5,
-    rings: 0.35, shell: 0,
+    rings: 0.35, crown: 0.22, shell: 0,
     height: 1.3, spread: 1.5, tube: 0.105, taper: 0.1, blend: 0.09,
     bulb: 0.5, open: 1, cup: 0.35, cupPos: 0.95, dish: 0, rimWave: 0,
   },
@@ -143,7 +147,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 4, mirror: 0,
     depth: 1, branches: 1, branchSpread: 0.4, length: 1.2, decay: 0.95,
     gravity: 0.12, outward: 0.9, curl: 0.45, wiggle: 0.04, loopiness: 1,
-    rings: 0, shell: 0,
+    rings: 0, crown: 0, shell: 0,
     height: 1.05, spread: 1.4, tube: 0.135, taper: 0, blend: 0.08,
     bulb: 0.7, open: 0, cup: 0.33, cupPos: 0.75, dish: 0, rimWave: 0,
   },
@@ -152,7 +156,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 4, mirror: 0,
     depth: 2, branches: 1, branchSpread: 0.3, length: 0.7, decay: 0.9,
     gravity: 0.9, outward: 0.5, curl: 0, wiggle: 0.06, loopiness: 0.3,
-    rings: 0.5, shell: 0.75,
+    rings: 0.5, crown: 0, shell: 0.75,
     height: 1.35, spread: 1.1, tube: 0.1, taper: 0, blend: 0.08,
     bulb: 0.4, open: 0.7, cup: 0.3, cupPos: 1, dish: 0, rimWave: 0,
   },
@@ -161,7 +165,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 8, mirror: 0,
     depth: 3, branches: 1, branchSpread: 0.15, length: 0.55, decay: 0.95,
     gravity: 0.9, outward: 0.45, curl: 0, wiggle: 0.04, loopiness: 0.6,
-    rings: 0.9, shell: 0,
+    rings: 0.9, crown: 0.9, shell: 0,
     height: 1.35, spread: 1.15, tube: 0.085, taper: 0, blend: 0.08,
     bulb: 0.5, open: 0.85, cup: 0.33, cupPos: 0.92, dish: 0, rimWave: 0,
   },
@@ -170,7 +174,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 5, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.6, length: 0.85, decay: 0.9,
     gravity: 0.65, outward: 0.95, curl: 0.15, wiggle: 0.18, loopiness: 0.2,
-    rings: 0.15, shell: 0,
+    rings: 0.15, crown: 0.15, shell: 0,
     height: 1.1, spread: 1.5, tube: 0.095, taper: 0.15, blend: 0.1,
     bulb: 1.2, open: 0, cup: 0.34, cupPos: 0.95, dish: 0, rimWave: 0,
   },
@@ -179,7 +183,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 3, mirror: 0,
     depth: 3, branches: 2, branchSpread: 0.45, length: 0.8, decay: 0.85,
     gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.7,
-    rings: 0.7, shell: 0,
+    rings: 0.7, crown: 0, shell: 0,
     height: 1.7, spread: 1.3, tube: 0.1, taper: 0.08, blend: 0.09,
     bulb: 0.35, open: 1, cup: 0.3, cupPos: 1, dish: 0.55, rimWave: 0.55,
   },
@@ -366,7 +370,10 @@ function primBound(p: Prim): { x: number; y: number; z: number; br: number } {
       return { x: p.x, y: p.y, z: p.z, br: Math.sqrt(p.r * p.r + p.h * p.h) + p.rd }
     case 3: {
       const rmax = p.r * (1 + p.amp)
-      const ymax = Math.abs(p.curve) * p.r + p.th * 2
+      // the plate curls up as curve·(q/r)² — at the wavy rim q can reach
+      // rmax, so bound the lift there or the dish gets clipped by the grid
+      const lift = (Math.abs(p.curve) * rmax * rmax) / p.r
+      const ymax = lift + p.th * 2
       return {
         x: 0,
         y: p.y + ymax / 2,
@@ -442,9 +449,13 @@ function openTip(sk: Skeleton, tip: V3, dir: V3, tubeR: number, open: number) {
   const nx = dir[0] / dl
   const ny = dir[1] / dl
   const nz = dir[2] / dl
-  sk.wedge.push(sphere(tip, tubeR * 1.24))
-  const boreR = tubeR * (0.38 + 0.34 * open)
-  const back = tubeR * 0.7
+  // flared lip: a swelling bead behind a wider mouth bead
+  sk.wedge.push(
+    sphere([tip[0] - nx * tubeR, tip[1] - ny * tubeR, tip[2] - nz * tubeR], tubeR * 1.12),
+  )
+  sk.wedge.push(sphere(tip, tubeR * 1.32))
+  const boreR = tubeR * (0.4 + 0.36 * open)
+  const back = tubeR * 0.9
   sk.wedgeNeg.push(
     tube(
       [
@@ -574,12 +585,37 @@ function buildSkeleton(p: HolderParams): Skeleton {
     sk.wedge.push(tube([a, ...bez(a, ctrl, b, 10)], rr))
   }
 
-  // `branches` limbs sprout straight from the cup wall in each wedge
+  /* ---- crown: a ring around the cup mouth that limbs grow from ---- */
+  let seedR = cupR * 0.9
+  let seedY = cupY - cupH * 0.4
+  if (p.crown > 0.03) {
+    const crownR = cupR + r0 * 2 + p.crown * (R * 0.8 - cupR - r0 * 2)
+    const yC = cupY + cupH * 0.2
+    ringTo(pol(crownR, m - s / 2, yC), r0)
+    // spoke tying the crown to the cup wall
+    sk.wedge.push(tube([pol(cupR * 0.85, m, yC), pol(crownR, m, yC)], r0 * 0.95))
+    // bored mouth through the crown at each corner
+    if (p.open > 0.05) {
+      const b = m + s / 2
+      const corner = pol(crownR, b, yC)
+      sk.wedge.push(sphere(corner, r0 * 1.3))
+      sk.wedgeNeg.push(
+        tube(
+          [pol(crownR - r0 * 2.4, b, yC), pol(crownR + r0 * 2.4, b, yC)],
+          r0 * (0.38 + 0.34 * p.open),
+        ),
+      )
+    }
+    seedR = crownR
+    seedY = yC - r0 * 0.4
+  }
+
+  // `branches` limbs sprout from the cup wall (or the crown) in each wedge
   const B0 = Math.round(p.branches)
   let tips: TipState[] = []
   for (let k = 0; k < B0; k++) {
     const a0 = m + ((k - (B0 - 1) / 2) * p.branchSpread * s) / Math.max(1, B0 - 1 || 1)
-    const seedPos = pol(cupR * 0.9, a0, cupY - cupH * 0.4)
+    const seedPos = pol(seedR, a0, seedY)
     tips.push({
       pos: seedPos,
       dir: norm([
@@ -755,8 +791,10 @@ function buildSkeleton(p: HolderParams): Skeleton {
     tips = next
   }
 
-  /* ---- optional shell: a hollow skin grown around the body ---- */
-  if (p.shell > 0.1) {
+  /* ---- optional shell: a hollow skin grown around the body ----
+     below 0.25 a shell is only fragments between its windows, so it is
+     treated as absent rather than producing broken-eggshell debris */
+  if (p.shell > 0.25) {
     const wall = r0 * 1.7
     const rx = R * 0.8
     const yLo = yBot + r0
@@ -766,7 +804,7 @@ function buildSkeleton(p: HolderParams): Skeleton {
     sk.central.push({ t: 5, x: 0, y: cy, z: 0, rx, ry })
     sk.centralNeg.push({ t: 5, x: 0, y: cy, z: 0, rx: rx - wall, ry: ry - wall })
     // one window per wedge, shrinking as the shell closes up
-    const winW = rx * s * (0.42 - 0.3 * p.shell)
+    const winW = rx * s * (0.36 - 0.24 * p.shell)
     if (winW > wall * 0.4) {
       sk.wedgeNeg.push(
         tube(
