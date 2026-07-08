@@ -33,6 +33,7 @@ const SECTIONS: Section[] = [
       { key: "curl", label: "Curl" },
       { key: "wiggle", label: "Wiggle" },
       { key: "loopiness", label: "Loops" },
+      { key: "rings", label: "Rings" },
     ],
   },
   {
@@ -45,6 +46,7 @@ const SECTIONS: Section[] = [
       { key: "blend", label: "Blend" },
       { key: "bulb", label: "Bulbs" },
       { key: "open", label: "Open" },
+      { key: "shell", label: "Shell" },
     ],
   },
   {
