@@ -132,8 +132,26 @@ export function ControlsPanel({
       <div className={`pointer-events-auto w-full max-w-md rounded-3xl border ${HAIR} bg-white dark:bg-black`}>
         {/* header row */}
         <div className="flex items-center gap-1.5 p-2.5">
-          <span className="px-1.5 text-[11px] uppercase tracking-widest text-black/60 dark:text-white/60">
-            {params.preset} · {params.seed}
+          <div className={`relative flex h-10 items-center rounded-full border ${HAIR}`}>
+            <select
+              value={params.preset}
+              onChange={(e) => onChange(genParams(params.seed, e.target.value))}
+              aria-label="Preset"
+              className="h-full appearance-none rounded-full bg-transparent pl-3.5 pr-8 text-xs font-medium text-black outline-none dark:text-white [&>option]:bg-white dark:[&>option]:bg-black"
+            >
+              {FAMILIES.map((fam) => (
+                <option key={fam} value={fam}>
+                  {fam.charAt(0).toUpperCase() + fam.slice(1)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-black/60 dark:text-white/60"
+              strokeWidth={2.2}
+            />
+          </div>
+          <span className="px-1 text-[11px] tabular-nums tracking-widest text-black/60 dark:text-white/60">
+            {params.seed}
           </span>
 
           <div className="flex-1" />
@@ -170,17 +188,6 @@ export function ControlsPanel({
         {/* expandable body */}
         {open && (
           <div className="max-h-[56vh] overflow-y-auto px-4 pb-4">
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {FAMILIES.map((fam) => (
-                <button
-                  key={fam}
-                  onClick={() => onChange(genParams(params.seed, fam))}
-                  className={chipClass(params.preset === fam)}
-                >
-                  {fam}
-                </button>
-              ))}
-            </div>
             <div className="mb-3 flex flex-wrap gap-1.5">
               <button
                 onClick={() => set({ mirror: params.mirror >= 0.5 ? 0 : 1 })}
