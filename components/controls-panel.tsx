@@ -3,11 +3,13 @@
 import { useState } from "react"
 import { Shuffle, SlidersHorizontal, ChevronDown, Download } from "lucide-react"
 import {
+  CANDLE_SPECS,
   FAMILIES,
   PARAM_RANGES,
   genParams,
   randomizeParams,
   randomSeed,
+  type CandleType,
   type ParamKey,
   type HolderParams,
 } from "@/lib/candle-holder"
@@ -222,6 +224,25 @@ export function ControlsPanel({
               </button>
             )}
 
+            {/* which real candle the socket is built for */}
+            <div className="mb-1">
+              <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
+                Lys
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(Object.keys(CANDLE_SPECS) as CandleType[]).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => set({ candle: c })}
+                    className={chipClass(params.candle === c)}
+                    title={CANDLE_SPECS[c].label}
+                  >
+                    {CANDLE_SPECS[c].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {SECTIONS.map(({ title, keys }) => (
               <div key={title} className="mb-2">
                 <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
@@ -241,6 +262,9 @@ export function ControlsPanel({
 
             <p className="pt-2 text-center text-[10px] uppercase tracking-widest text-black/60 dark:text-white/60">
               grown from symmetries · booleans · lattices
+              <br />
+              stl in mm · sokkel{" "}
+              {params.candle === "telys" ? "Ø41 × 12 mm" : "Ø23 × 28 mm"}
             </p>
           </div>
         )}
