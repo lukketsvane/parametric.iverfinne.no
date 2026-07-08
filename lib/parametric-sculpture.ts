@@ -55,53 +55,128 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v))
 }
 
+function smoothstep(a: number, b: number, x: number) {
+  const t = clamp((x - a) / (b - a), 0, 1)
+  return t * t * (3 - 2 * t)
+}
+
 /* ------------------------------------------------------------------ */
-/* VESSEL: revolved corrugated shell (vases, domes, tumblers)          */
+/* VESSEL: thick-walled fluted vessel of revolution (vases, bowls)     */
+/*                                                                     */
+/* A solid, watertight cup: an outer fluted skin, a smooth inner       */
+/* cavity offset inward by a real wall thickness, a solid foot, and a  */
+/* thick rim joining the two — so it never reads as a paper-thin shell.*/
+/* The flutes are deliberately softened so the default vessel is a     */
+/* minimal fluted form rather than a spiky one.                        */
 /* ------------------------------------------------------------------ */
 function buildVessel(p: SculptureParams, detail: number): THREE.BufferGeometry {
   const Nu = clamp(Math.round(p.fins * 8 * detail), 220, Math.round(512 * detail))
-  const Nv = Math.round(168 * detail)
-  const H = 3.2
-  const baseR = 1.05
+  const Nv = clamp(Math.round(150 * detail), 90, 420)
+  const H = 2.9
+  const baseR = 1.16
+  const wall = 0.16 // radial wall thickness
+  const vFloor = 0.12 // interior cavity floor as a fraction of height
+  const yAt = (v: number) => (v - 0.5) * H
 
-  const positions: number[] = []
-  const rows = Nv + 1
-
-  for (let j = 0; j < rows; j++) {
-    const v = j / Nv // 0..1 bottom→top
-    // silhouette: belly + top flare + slight foot taper
+  function silhouette(v: number) {
     const belly = p.bulge * Math.sin(Math.PI * v)
     const topFlare = p.flare * Math.pow(clamp((v - 0.45) / 0.55, 0, 1), 2.2)
-    const foot = 0.16 * Math.pow(1 - v, 2.5) // subtle base
-    const silhouette = 1 + belly + topFlare - foot
-    // fins pinch/bulge along height for the perforated look
+    const foot = 0.14 * Math.pow(1 - v, 2.6)
+    return 1 + belly + topFlare - foot
+  }
+  function outerR(v: number, theta: number) {
+    const sil = silhouette(v)
     const finProfile = 1 - p.wavAmount * (0.5 + 0.5 * Math.cos(v * p.waviness * Math.PI * 2))
-    const y = (v - 0.5) * H
-
-    for (let i = 0; i < Nu; i++) {
-      const u = i / Nu
-      const theta = u * Math.PI * 2
-      const angle = theta + p.twist * Math.PI * 2 * (v - 0.5)
-      const r = baseR * silhouette * (1 + p.finDepth * finProfile * ridge(p.fins * angle, p.finSharpness))
-      positions.push(Math.cos(theta) * r, y, Math.sin(theta) * r)
-    }
+    const angle = theta + p.twist * Math.PI * 2 * (v - 0.5)
+    // rounded ribs (sharpness capped low) that fade to clean rings at the
+    // foot and lip — a minimal fluted body rather than a spiky one
+    const rib = ridge(p.fins * angle, Math.min(p.finSharpness, 2.6))
+    const fade = smoothstep(0.02, 0.24, v) * (1 - 0.65 * smoothstep(0.88, 1, v))
+    const flute = 0.5 * p.finDepth * finProfile * fade * rib
+    return baseR * sil * (1 + flute)
   }
 
-  const indices: number[] = []
+  const pos: number[] = []
+  const idx: number[] = []
+  const outerRing: number[] = [] // first vertex index of each outer ring
+  const innerRing: number[] = []
+
+  // outer skin, v = 0..1
+  for (let j = 0; j <= Nv; j++) {
+    const v = j / Nv
+    const y = yAt(v)
+    outerRing.push(pos.length / 3)
+    for (let i = 0; i < Nu; i++) {
+      const theta = (i / Nu) * Math.PI * 2
+      const r = outerR(v, theta)
+      pos.push(Math.cos(theta) * r, y, Math.sin(theta) * r)
+    }
+  }
+  // inner cavity skin, v = vFloor..1 (offset inward by the wall)
+  const jFloor = Math.round(vFloor * Nv)
+  for (let j = jFloor; j <= Nv; j++) {
+    const v = j / Nv
+    const y = yAt(v)
+    innerRing.push(pos.length / 3)
+    for (let i = 0; i < Nu; i++) {
+      const theta = (i / Nu) * Math.PI * 2
+      const r = Math.max(0.1, outerR(v, theta) - wall)
+      pos.push(Math.cos(theta) * r, y, Math.sin(theta) * r)
+    }
+  }
+  const botCenter = pos.length / 3
+  pos.push(0, yAt(0), 0)
+  const cavCenter = pos.length / 3
+  pos.push(0, yAt(jFloor / Nv), 0)
+
+  const quad = (a: number, b: number, c: number, d: number) => {
+    idx.push(a, c, b, b, c, d)
+  }
+  // outer skin
   for (let j = 0; j < Nv; j++) {
+    const r0 = outerRing[j], r1 = outerRing[j + 1]
     for (let i = 0; i < Nu; i++) {
       const i2 = (i + 1) % Nu
-      const a = j * Nu + i
-      const b = j * Nu + i2
-      const c = (j + 1) * Nu + i
-      const d = (j + 1) * Nu + i2
-      indices.push(a, c, b, b, c, d)
+      quad(r0 + i, r0 + i2, r1 + i, r1 + i2)
+    }
+  }
+  // inner skin (reversed winding so it faces into the cavity)
+  const innerRows = innerRing.length
+  for (let j = 0; j < innerRows - 1; j++) {
+    const r0 = innerRing[j], r1 = innerRing[j + 1]
+    for (let i = 0; i < Nu; i++) {
+      const i2 = (i + 1) % Nu
+      quad(r0 + i2, r0 + i, r1 + i2, r1 + i)
+    }
+  }
+  // thick rim: join the outer and inner top rings
+  {
+    const ro = outerRing[Nv], ri = innerRing[innerRows - 1]
+    for (let i = 0; i < Nu; i++) {
+      const i2 = (i + 1) % Nu
+      quad(ro + i, ro + i2, ri + i, ri + i2)
+    }
+  }
+  // solid foot: fan the outer bottom ring to a center point
+  {
+    const r0 = outerRing[0]
+    for (let i = 0; i < Nu; i++) {
+      const i2 = (i + 1) % Nu
+      idx.push(botCenter, r0 + i2, r0 + i)
+    }
+  }
+  // cavity floor: fan the inner bottom ring to a center point
+  {
+    const r0 = innerRing[0]
+    for (let i = 0; i < Nu; i++) {
+      const i2 = (i + 1) % Nu
+      idx.push(cavCenter, r0 + i, r0 + i2)
     }
   }
 
   const geo = new THREE.BufferGeometry()
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
-  geo.setIndex(indices)
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3))
+  geo.setIndex(idx)
   geo.computeVertexNormals()
   geo.center()
   return geo
@@ -180,8 +255,7 @@ const RR = PARAM_RANGES
 function rand(min: number, max: number) {
   return min + Math.random() * (max - min)
 }
-export function randomizeParams(): SculptureParams {
-  const form: FormType = Math.random() < 0.5 ? "ring" : "vessel"
+export function randomizeParams(form: FormType): SculptureParams {
   return {
     form,
     fins: Math.round(rand(RR.fins.min, RR.fins.max)),

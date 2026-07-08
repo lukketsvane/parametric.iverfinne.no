@@ -52,13 +52,11 @@ export function FinMesh({
   params,
   playing,
   speed,
-  dark,
   detail,
 }: {
   params: FinParams
   playing: boolean
   speed: number
-  dark: boolean
   detail: number
 }) {
   const groupRef = useRef<THREE.Group>(null)
@@ -118,11 +116,7 @@ export function FinMesh({
         castShadow
         receiveShadow
       >
-        <meshStandardMaterial
-          color={dark ? "#ffffff" : "#000000"}
-          roughness={0.42}
-          metalness={0}
-        />
+        <meshStandardMaterial color="#cccccc" roughness={0.42} metalness={0} />
       </instancedMesh>
     </group>
   )

@@ -39,13 +39,11 @@ export function SculptureMesh({
   params,
   playing,
   speed,
-  dark,
   detail,
 }: {
   params: SculptureParams
   playing: boolean
   speed: number
-  dark: boolean
   detail: number
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
@@ -87,7 +85,7 @@ export function SculptureMesh({
   return (
     <mesh ref={meshRef} castShadow receiveShadow>
       <meshStandardMaterial
-        color={dark ? "#ffffff" : "#000000"}
+        color="#cccccc"
         roughness={0.42}
         metalness={0}
         side={THREE.DoubleSide}

@@ -52,9 +52,9 @@ export function SculptureViewer({
       <Suspense fallback={null}>
         <group rotation={[0.3, 0.4, 0]}>
           {params.form === "fin" ? (
-            <FinMesh params={finParams} playing={playing} speed={speed} dark={dark} detail={detail} />
+            <FinMesh params={finParams} playing={playing} speed={speed} detail={detail} />
           ) : (
-            <SculptureMesh params={params} playing={playing} speed={speed} dark={dark} detail={detail} />
+            <SculptureMesh params={params} playing={playing} speed={speed} detail={detail} />
           )}
         </group>
         <Environment preset="studio" environmentIntensity={0.85} />
