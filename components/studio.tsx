@@ -102,7 +102,7 @@ export function Studio() {
         onRandomize={() =>
           params.form === "fin"
             ? setFinParams(genFinParams(randomFinSeed()))
-            : setParams(randomizeParams())
+            : setParams(randomizeParams(params.form))
         }
       />
     </main>
