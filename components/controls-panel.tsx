@@ -36,6 +36,7 @@ const SECTIONS: Section[] = [
       { key: "wiggle", label: "Wiggle" },
       { key: "loopiness", label: "Loops" },
       { key: "rings", label: "Rings" },
+      { key: "crown", label: "Crown" },
     ],
   },
   {
@@ -55,7 +56,7 @@ const SECTIONS: Section[] = [
     title: "Cup",
     keys: [
       { key: "cup", label: "Cup" },
-      { key: "cupPos", label: "Height" },
+      { key: "cupPos", label: "Level" },
       { key: "dish", label: "Dish" },
       { key: "rimWave", label: "Rim" },
     ],
@@ -81,19 +82,33 @@ function Row({
   label,
   value,
   range,
+  locked,
   onChange,
+  onToggleLock,
 }: {
   label: string
   value: number
   range: { min: number; max: number; step: number }
+  locked: boolean
   onChange: (v: number) => void
+  onToggleLock: () => void
 }) {
   const isInt = range.step >= 1
   return (
-    <label className="flex items-center gap-3 py-1.5">
-      <span className="w-20 shrink-0 text-[11px] uppercase tracking-widest text-black dark:text-white">
+    <div
+      className={`flex items-center gap-3 py-1.5 transition-opacity ${
+        locked ? "opacity-30" : ""
+      }`}
+    >
+      {/* tap the label to lock this value against randomize */}
+      <button
+        onClick={onToggleLock}
+        aria-pressed={locked}
+        title={locked ? "Locked — tap to let randomize change it" : "Tap to lock against randomize"}
+        className="w-20 shrink-0 text-left text-[11px] uppercase tracking-widest text-black dark:text-white"
+      >
         {label}
-      </span>
+      </button>
       <input
         type="range"
         className="pslider flex-1"
@@ -106,7 +121,7 @@ function Row({
       <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-black dark:text-white">
         {isInt ? value : value.toFixed(2)}
       </span>
-    </label>
+    </div>
   )
 }
 
@@ -124,8 +139,24 @@ export function ControlsPanel({
   onChange: (p: HolderParams) => void
 }) {
   const [open, setOpen] = useState(false)
+  // tapped-locked parameters survive randomize untouched
+  const [locked, setLocked] = useState<ReadonlySet<ParamKey>>(new Set())
 
   const set = (patch: Partial<HolderParams>) => onChange({ ...params, ...patch })
+
+  const toggleLock = (key: ParamKey) =>
+    setLocked((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  const shuffle = () => {
+    const next = randomizeParams(randomSeed(), params.preset)
+    for (const k of locked) next[k] = params[k]
+    onChange(next)
+  }
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
@@ -157,7 +188,7 @@ export function ControlsPanel({
           <div className="flex-1" />
 
           <button
-            onClick={() => onChange(randomizeParams(randomSeed(), params.preset))}
+            onClick={shuffle}
             aria-label="Randomize holder"
             className={ICON_BTN_SOLID}
           >
@@ -261,7 +292,9 @@ export function ControlsPanel({
                     label={label}
                     value={params[key]}
                     range={PARAM_RANGES[key]}
+                    locked={locked.has(key)}
                     onChange={(v) => set({ [key]: v } as Partial<HolderParams>)}
+                    onToggleLock={() => toggleLock(key)}
                   />
                 ))}
               </div>
