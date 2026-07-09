@@ -1,7 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Shuffle, SlidersHorizontal, ChevronDown, Download } from "lucide-react"
+import {
+  Shuffle,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  Download,
+} from "lucide-react"
 import {
   CANDLE_SPECS,
   FAMILIES,
@@ -138,7 +144,9 @@ export function ControlsPanel({
   onToggleDetail: () => void
   onChange: (p: HolderParams) => void
 }) {
-  const [open, setOpen] = useState(false)
+  // collapsed → half (preset, chips, candle) → full (every parameter)
+  const [mode, setMode] = useState<"collapsed" | "half" | "full">("collapsed")
+  const open = mode !== "collapsed"
   // tapped-locked parameters survive randomize untouched
   const [locked, setLocked] = useState<ReadonlySet<ParamKey>>(new Set())
 
@@ -203,7 +211,7 @@ export function ControlsPanel({
             <Download className="h-4 w-4" strokeWidth={2.2} />
           </button>
           <button
-            onClick={() => setOpen((o) => !o)}
+            onClick={() => setMode(open ? "collapsed" : "half")}
             aria-label={open ? "Hide controls" : "Show controls"}
             aria-expanded={open}
             className={ICON_BTN}
@@ -281,31 +289,54 @@ export function ControlsPanel({
               </div>
             </div>
 
-            {SECTIONS.map(({ title, keys }) => (
-              <div key={title} className="mb-2">
-                <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
-                  {title}
-                </p>
-                {keys.map(({ key, label }) => (
-                  <Row
-                    key={key}
-                    label={label}
-                    value={params[key]}
-                    range={PARAM_RANGES[key]}
-                    locked={locked.has(key)}
-                    onChange={(v) => set({ [key]: v } as Partial<HolderParams>)}
-                    onToggleLock={() => toggleLock(key)}
-                  />
-                ))}
-              </div>
-            ))}
+            {/* half ↔ full: every parameter lives behind this expander */}
+            <button
+              onClick={() => setMode(mode === "full" ? "half" : "full")}
+              aria-expanded={mode === "full"}
+              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-2xl border ${HAIR} py-2 text-[10px] font-semibold uppercase tracking-widest text-black/70 transition active:scale-[0.99] dark:text-white/70`}
+            >
+              {mode === "full" ? (
+                <>
+                  fewer controls
+                  <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.2} />
+                </>
+              ) : (
+                <>
+                  all parameters
+                  <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.2} />
+                </>
+              )}
+            </button>
 
-            <p className="pt-2 text-center text-[10px] uppercase tracking-widest text-black/60 dark:text-white/60">
-              grown from symmetries · booleans · lattices
-              <br />
-              stl in mm · sokkel{" "}
-              {params.candle === "telys" ? "Ø41 × 12 mm" : "Ø23 × 28 mm"}
-            </p>
+            {mode === "full" && (
+              <>
+                {SECTIONS.map(({ title, keys }) => (
+                  <div key={title} className="mb-2">
+                    <p className="pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
+                      {title}
+                    </p>
+                    {keys.map(({ key, label }) => (
+                      <Row
+                        key={key}
+                        label={label}
+                        value={params[key]}
+                        range={PARAM_RANGES[key]}
+                        locked={locked.has(key)}
+                        onChange={(v) => set({ [key]: v } as Partial<HolderParams>)}
+                        onToggleLock={() => toggleLock(key)}
+                      />
+                    ))}
+                  </div>
+                ))}
+
+                <p className="pt-2 text-center text-[10px] uppercase tracking-widest text-black/60 dark:text-white/60">
+                  grown from symmetries · booleans · lattices
+                  <br />
+                  stl in mm · sokkel{" "}
+                  {params.candle === "telys" ? "Ø41 × 12 mm" : "Ø23 × 28 mm"}
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
