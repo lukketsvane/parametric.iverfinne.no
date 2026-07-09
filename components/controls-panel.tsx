@@ -56,6 +56,7 @@ const SECTIONS: Section[] = [
       { key: "blend", label: "Blend" },
       { key: "bulb", label: "Bulbs" },
       { key: "open", label: "Open" },
+      { key: "spikes", label: "Spikes" },
       { key: "shell", label: "Shell" },
     ],
   },
