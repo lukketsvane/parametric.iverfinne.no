@@ -68,6 +68,9 @@ export type HolderParams = {
   /** crown: a ring around the cup mouth that limbs grow from, with bored
       mouths at its corners when open ends are on. 0 = none, 1 = wide */
   crown: number
+  /** stacked cells: the grown body is repeated vertically, staggered by
+      half a sector, like a tower of fused lattice pods */
+  levels: number
   /* body */
   /** 0 = open lattice, towards 1 = a hollow shell grown around the body,
       pierced by one window per wedge that shrinks as the shell closes */
@@ -101,6 +104,7 @@ export const PARAM_RANGES = {
   loopiness: { min: 0, max: 1, step: 0.02 },
   rings: { min: 0, max: 1, step: 0.02 },
   crown: { min: 0, max: 1, step: 0.02 },
+  levels: { min: 1, max: 3, step: 1 },
   shell: { min: 0, max: 1, step: 0.02 },
   height: { min: 0.7, max: 2.6, step: 0.01 },
   spread: { min: 0.7, max: 2.2, step: 0.01 },
@@ -124,21 +128,30 @@ export type ParamKey = keyof typeof PARAM_RANGES
 type Recipe = Omit<HolderParams, "preset" | "seed">
 
 export const PRESETS: Record<string, Recipe> = {
-  whisk: {
+  bloom: {
     candle: "kronelys",
     symmetry: 3, mirror: 0,
-    depth: 2, branches: 2, branchSpread: 0.5, length: 1.1, decay: 0.85,
-    gravity: 0.75, outward: 0.55, curl: 0.1, wiggle: 0.08, loopiness: 0.9,
-    rings: 0.6, crown: 0, shell: 0,
-    height: 2.0, spread: 1.1, tube: 0.1, taper: 0.08, blend: 0.09,
-    bulb: 0.25, open: 0, cup: 0.3, cupPos: 0.62, dish: 0, rimWave: 0,
+    depth: 3, branches: 2, branchSpread: 0.45, length: 0.8, decay: 0.85,
+    gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.8,
+    rings: 0.55, crown: 0, levels: 1, shell: 0,
+    height: 1.7, spread: 1.35, tube: 0.1, taper: 0.08, blend: 0.09,
+    bulb: 0.35, open: 1, cup: 0.3, cupPos: 1, dish: 0.55, rimWave: 0.55,
+  },
+  whisk: {
+    candle: "kronelys",
+    symmetry: 4, mirror: 0,
+    depth: 2, branches: 1, branchSpread: 0.3, length: 1.35, decay: 0.95,
+    gravity: -0.85, outward: 0.45, curl: 0.12, wiggle: 0.05, loopiness: 1,
+    rings: 0.35, crown: 0.5, levels: 1, shell: 0,
+    height: 2.3, spread: 1.1, tube: 0.1, taper: 0.05, blend: 0.09,
+    bulb: 0.2, open: 0, cup: 0.3, cupPos: 0.4, dish: 0, rimWave: 0,
   },
   spider: {
     candle: "kronelys",
     symmetry: 4, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.55, length: 0.9, decay: 0.9,
     gravity: 0.5, outward: 0.9, curl: 0, wiggle: 0.1, loopiness: 0.5,
-    rings: 0.35, crown: 0.22, shell: 0,
+    rings: 0.35, crown: 0.22, levels: 1, shell: 0,
     height: 1.3, spread: 1.5, tube: 0.105, taper: 0.1, blend: 0.09,
     bulb: 0.5, open: 1, cup: 0.35, cupPos: 0.95, dish: 0, rimWave: 0,
   },
@@ -147,7 +160,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 4, mirror: 0,
     depth: 1, branches: 1, branchSpread: 0.4, length: 1.2, decay: 0.95,
     gravity: 0.12, outward: 0.9, curl: 0.45, wiggle: 0.04, loopiness: 1,
-    rings: 0, crown: 0, shell: 0,
+    rings: 0, crown: 0, levels: 1, shell: 0,
     height: 1.05, spread: 1.4, tube: 0.135, taper: 0, blend: 0.08,
     bulb: 0.7, open: 0, cup: 0.33, cupPos: 0.75, dish: 0, rimWave: 0,
   },
@@ -156,7 +169,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 4, mirror: 0,
     depth: 2, branches: 1, branchSpread: 0.3, length: 0.7, decay: 0.9,
     gravity: 0.9, outward: 0.5, curl: 0, wiggle: 0.06, loopiness: 0.3,
-    rings: 0.5, crown: 0, shell: 0.75,
+    rings: 0.5, crown: 0, levels: 1, shell: 0.75,
     height: 1.35, spread: 1.1, tube: 0.1, taper: 0, blend: 0.08,
     bulb: 0.4, open: 0.7, cup: 0.3, cupPos: 1, dish: 0, rimWave: 0,
   },
@@ -165,7 +178,7 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 8, mirror: 0,
     depth: 3, branches: 1, branchSpread: 0.15, length: 0.55, decay: 0.95,
     gravity: 0.9, outward: 0.45, curl: 0, wiggle: 0.04, loopiness: 0.6,
-    rings: 0.9, crown: 0.9, shell: 0,
+    rings: 0.9, crown: 0.9, levels: 1, shell: 0,
     height: 1.35, spread: 1.15, tube: 0.085, taper: 0, blend: 0.08,
     bulb: 0.5, open: 0.85, cup: 0.33, cupPos: 0.92, dish: 0, rimWave: 0,
   },
@@ -174,18 +187,9 @@ export const PRESETS: Record<string, Recipe> = {
     symmetry: 5, mirror: 0,
     depth: 2, branches: 2, branchSpread: 0.6, length: 0.85, decay: 0.9,
     gravity: 0.65, outward: 0.95, curl: 0.15, wiggle: 0.18, loopiness: 0.2,
-    rings: 0.15, crown: 0.15, shell: 0,
+    rings: 0.15, crown: 0.15, levels: 1, shell: 0,
     height: 1.1, spread: 1.5, tube: 0.095, taper: 0.15, blend: 0.1,
     bulb: 1.2, open: 0, cup: 0.34, cupPos: 0.95, dish: 0, rimWave: 0,
-  },
-  bloom: {
-    candle: "kronelys",
-    symmetry: 3, mirror: 0,
-    depth: 3, branches: 2, branchSpread: 0.45, length: 0.8, decay: 0.85,
-    gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.7,
-    rings: 0.7, crown: 0, shell: 0,
-    height: 1.7, spread: 1.3, tube: 0.1, taper: 0.08, blend: 0.09,
-    bulb: 0.35, open: 1, cup: 0.3, cupPos: 1, dish: 0.55, rimWave: 0.55,
   },
 }
 
@@ -219,7 +223,7 @@ function snap(k: ParamKey, v: number): number {
 
 /** a preset verbatim — the seed only drives the growth randomness */
 export function genParams(seed: number, preset: string): HolderParams {
-  const base = PRESETS[preset] ?? PRESETS.whisk
+  const base = PRESETS[preset] ?? PRESETS.bloom
   return { preset, seed, ...base }
 }
 
@@ -229,7 +233,7 @@ export function genParams(seed: number, preset: string): HolderParams {
  */
 export function randomizeParams(seed: number, preset: string): HolderParams {
   const rnd = mulberry32((seed * 2654435761 + 0x85ebca6b) >>> 0)
-  const base = { ...(PRESETS[preset] ?? PRESETS.whisk) }
+  const base = { ...(PRESETS[preset] ?? PRESETS.bloom) }
   const WILD = 0.6 // 0 = preset only, 1 = uniform over the whole range
   for (const k of Object.keys(PARAM_RANGES) as ParamKey[]) {
     const r = PARAM_RANGES[k]
@@ -240,7 +244,7 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
 }
 
 export const DEFAULT_SEED = 7
-export const DEFAULT_PARAMS: HolderParams = genParams(DEFAULT_SEED, "whisk")
+export const DEFAULT_PARAMS: HolderParams = genParams(DEFAULT_SEED, "bloom")
 
 /* ------------------------------------------------------------------ */
 /* SDF primitives                                                      */
@@ -409,6 +413,23 @@ function primBound(p: Prim): { x: number; y: number; z: number; br: number } {
 function smin(a: number, b: number, k: number): number {
   const h = Math.max(k - Math.abs(a - b), 0) / k
   return Math.min(a, b) - h * h * k * 0.25
+}
+
+/** shift a primitive vertically */
+function translatePrimY(p: Prim, dy: number): Prim {
+  switch (p.t) {
+    case 1:
+    case 2:
+    case 3:
+      return { ...p, y: p.y + dy }
+    case 4: {
+      const segs = new Float32Array(p.segs)
+      for (let o = 1; o < segs.length; o += 8) segs[o] += dy
+      return { ...p, segs }
+    }
+    case 5:
+      return { ...p, y: p.y + dy }
+  }
 }
 
 /** rotate a primitive around the Y axis */
@@ -628,8 +649,16 @@ function buildSkeleton(p: HolderParams): Skeleton {
     radii: number[]
   }
 
-  // every strut endpoint becomes a loop-closure anchor
-  const anchors: V3[] = [[0, cupY - cupH, 0]]
+  // the candle interface stays unique when the body is stacked in levels
+  const cupPrims = sk.central.length
+  const cupNegPrims = sk.centralNeg.length
+
+  // every strut endpoint becomes a loop-closure anchor; the two axis
+  // anchors let rising limbs converge into apex knots (teepees, domes)
+  const anchors: V3[] = [
+    [0, cupY - cupH, 0],
+    [0, yTop - r0 * 1.5, 0],
+  ]
   const unit = (H + R) / 2
 
   // a tip can close a ring to its own symmetry copies: with n-fold
@@ -916,6 +945,51 @@ function buildSkeleton(p: HolderParams): Skeleton {
     }
   }
 
+  /* ---- levels: stack the grown body into a staggered tower ---- */
+  const L = Math.round(p.levels)
+  if (L > 1) {
+    const dy = H * 0.84
+    const baseW = sk.wedge.slice()
+    const baseWN = sk.wedgeNeg.slice()
+    const baseC = sk.central.slice(cupPrims)
+    const baseCN = sk.centralNeg.slice(cupNegPrims)
+    // the lowest and highest off-axis anchors weld consecutive levels
+    let lowA: V3 | null = null
+    let highA: V3 | null = null
+    for (const a of anchors) {
+      if (Math.hypot(a[0], a[2]) < 0.2) continue
+      if (!lowA || a[1] < lowA[1]) lowA = a
+      if (!highA || a[1] > highA[1]) highA = a
+    }
+    for (let k = 1; k < L; k++) {
+      const rot = (k % 2) * s * 0.5
+      const rotPrev = ((k - 1) % 2) * s * 0.5
+      for (const prim of baseW)
+        sk.wedge.push(translatePrimY(rotatePrim(prim, rot), -dy * k))
+      for (const prim of baseWN)
+        sk.wedgeNeg.push(translatePrimY(rotatePrim(prim, rot), -dy * k))
+      for (const prim of baseC)
+        sk.central.push(translatePrimY(rotatePrim(prim, rot), -dy * k))
+      for (const prim of baseCN)
+        sk.centralNeg.push(translatePrimY(rotatePrim(prim, rot), -dy * k))
+      // guaranteed weld: a strut from the level above's foot anchor down
+      // to the level below's crown anchor
+      if (lowA && highA) {
+        const a = rotY(lowA, rotPrev)
+        const b = rotY(highA, rot)
+        sk.wedge.push(
+          tube(
+            [
+              [a[0], a[1] - dy * (k - 1), a[2]],
+              [b[0], b[1] - dy * k, b[2]],
+            ],
+            r0 * 0.95,
+          ),
+        )
+      }
+    }
+  }
+
   // anything reaching beyond the safe folding window gets replicated
   // explicitly so it can never be sliced at the fold horizon
   explodeWidePrims(sk, n, s)
@@ -1173,7 +1247,7 @@ export function buildHolderArrays(
 /**
  * Connected-component filter over the triangle mesh: tiny disconnected
  * islands (severed lip beads, torn slivers) are removed so the result is
- * always one clean printable body. Components under 10% of the largest
+ * always one clean printable body. Components under 30% of the largest
  * component's volume are dropped.
  */
 function filterIslands(positions: Float32Array, indices: Uint32Array): Uint32Array {
@@ -1215,7 +1289,7 @@ function filterIslands(positions: Float32Array, indices: Uint32Array): Uint32Arr
   for (const v of volume.values()) maxVol = Math.max(maxVol, Math.abs(v))
   const keep = new Set<number>()
   for (const [root, v] of volume) {
-    if (Math.abs(v) >= maxVol * 0.1) keep.add(root)
+    if (Math.abs(v) >= maxVol * 0.3) keep.add(root)
   }
   if (keep.size === volume.size) return indices
   const out = new Uint32Array(indices.length)
