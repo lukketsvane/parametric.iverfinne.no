@@ -82,6 +82,8 @@ export type HolderParams = {
   blend: number
   bulb: number
   open: number
+  /** conical studs on rings, shells and feet — sea-urchin armor */
+  spikes: number
   /* the candle interface */
   cup: number
   cupPos: number
@@ -113,6 +115,7 @@ export const PARAM_RANGES = {
   blend: { min: 0.04, max: 0.2, step: 0.005 },
   bulb: { min: 0, max: 2, step: 0.02 },
   open: { min: 0, max: 1, step: 0.05 },
+  spikes: { min: 0, max: 1, step: 0.02 },
   cup: { min: 0.24, max: 0.48, step: 0.005 },
   cupPos: { min: 0.3, max: 1, step: 0.02 },
   dish: { min: 0, max: 1, step: 0.02 },
@@ -135,7 +138,34 @@ export const PRESETS: Record<string, Recipe> = {
     gravity: 0.95, outward: 0.7, curl: 0.08, wiggle: 0, loopiness: 1,
     rings: 0.12, crown: 0, levels: 1, shell: 0,
     height: 2.05, spread: 1.02, tube: 0.09, taper: 0.08, blend: 0.075,
-    bulb: 0.25, open: 1, cup: 0.3, cupPos: 1, dish: 0.42, rimWave: 0.72,
+    bulb: 0.25, open: 1, spikes: 0, cup: 0.3, cupPos: 1, dish: 0.42, rimWave: 0.72,
+  },
+  wheel: {
+    candle: "telys",
+    symmetry: 8, mirror: 0,
+    depth: 1, branches: 1, branchSpread: 0.55, length: 1.3, decay: 0.9,
+    gravity: 0.05, outward: 0.9, curl: 0, wiggle: 0, loopiness: 1,
+    rings: 0, crown: 0, levels: 1, shell: 0,
+    height: 0.75, spread: 1.35, tube: 0.105, taper: 0, blend: 0.08,
+    bulb: 0, open: 0, spikes: 0, cup: 0.42, cupPos: 0.55, dish: 0.3, rimWave: 0.9,
+  },
+  coral: {
+    candle: "telys",
+    symmetry: 10, mirror: 0,
+    depth: 2, branches: 1, branchSpread: 0.3, length: 1.0, decay: 0.9,
+    gravity: -0.85, outward: 0.35, curl: 0, wiggle: 0, loopiness: 0.2,
+    rings: 0.3, crown: 0.7, levels: 1, shell: 0,
+    height: 1.15, spread: 1.2, tube: 0.095, taper: 0.05, blend: 0.075,
+    bulb: 0.2, open: 1, spikes: 0, cup: 0.42, cupPos: 0.42, dish: 0, rimWave: 0,
+  },
+  urchin: {
+    candle: "telys",
+    symmetry: 12, mirror: 0,
+    depth: 1, branches: 1, branchSpread: 0.3, length: 0.7, decay: 0.9,
+    gravity: 0.9, outward: 0.3, curl: 0, wiggle: 0, loopiness: 0,
+    rings: 0, crown: 0, levels: 1, shell: 1,
+    height: 0.72, spread: 1.15, tube: 0.1, taper: 0, blend: 0.07,
+    bulb: 0.3, open: 0.75, spikes: 1, cup: 0.44, cupPos: 1, dish: 0, rimWave: 0,
   },
   whisk: {
     candle: "kronelys",
@@ -144,7 +174,7 @@ export const PRESETS: Record<string, Recipe> = {
     gravity: -0.85, outward: 0.45, curl: 0.12, wiggle: 0.05, loopiness: 1,
     rings: 0.35, crown: 0.5, levels: 1, shell: 0,
     height: 2.3, spread: 1.1, tube: 0.1, taper: 0.05, blend: 0.09,
-    bulb: 0.2, open: 0, cup: 0.3, cupPos: 0.4, dish: 0, rimWave: 0,
+    bulb: 0.2, open: 0, spikes: 0, cup: 0.3, cupPos: 0.4, dish: 0, rimWave: 0,
   },
   spider: {
     candle: "kronelys",
@@ -153,7 +183,7 @@ export const PRESETS: Record<string, Recipe> = {
     gravity: 0.5, outward: 0.9, curl: 0, wiggle: 0.1, loopiness: 0.5,
     rings: 0.35, crown: 0.22, levels: 1, shell: 0,
     height: 1.3, spread: 1.5, tube: 0.105, taper: 0.1, blend: 0.09,
-    bulb: 0.5, open: 1, cup: 0.35, cupPos: 0.95, dish: 0, rimWave: 0,
+    bulb: 0.5, open: 1, spikes: 0, cup: 0.35, cupPos: 0.95, dish: 0, rimWave: 0,
   },
   clover: {
     candle: "telys",
@@ -161,8 +191,8 @@ export const PRESETS: Record<string, Recipe> = {
     depth: 1, branches: 1, branchSpread: 0.4, length: 1.2, decay: 0.95,
     gravity: 0.12, outward: 0.9, curl: 0.45, wiggle: 0.04, loopiness: 1,
     rings: 0, crown: 0, levels: 1, shell: 0,
-    height: 1.05, spread: 1.4, tube: 0.135, taper: 0, blend: 0.08,
-    bulb: 0.7, open: 0, cup: 0.33, cupPos: 0.75, dish: 0, rimWave: 0,
+    height: 1.05, spread: 1.4, tube: 0.12, taper: 0, blend: 0.08,
+    bulb: 0.3, open: 0, spikes: 0, cup: 0.33, cupPos: 0.85, dish: 0.3, rimWave: 0.55,
   },
   pod: {
     candle: "telys",
@@ -171,7 +201,7 @@ export const PRESETS: Record<string, Recipe> = {
     gravity: 0.9, outward: 0.5, curl: 0, wiggle: 0.06, loopiness: 0.3,
     rings: 0.5, crown: 0, levels: 1, shell: 0.75,
     height: 1.35, spread: 1.1, tube: 0.1, taper: 0, blend: 0.08,
-    bulb: 0.4, open: 0.7, cup: 0.3, cupPos: 1, dish: 0, rimWave: 0,
+    bulb: 0.4, open: 0.7, spikes: 0, cup: 0.3, cupPos: 1, dish: 0, rimWave: 0,
   },
   cage: {
     candle: "kronelys",
@@ -180,7 +210,7 @@ export const PRESETS: Record<string, Recipe> = {
     gravity: 0.9, outward: 0.45, curl: 0, wiggle: 0.04, loopiness: 0.6,
     rings: 0.9, crown: 0.9, levels: 1, shell: 0,
     height: 1.35, spread: 1.15, tube: 0.085, taper: 0, blend: 0.08,
-    bulb: 0.5, open: 0.85, cup: 0.33, cupPos: 0.92, dish: 0, rimWave: 0,
+    bulb: 0.5, open: 0.85, spikes: 0, cup: 0.33, cupPos: 0.92, dish: 0, rimWave: 0,
   },
   molecule: {
     candle: "kronelys",
@@ -189,7 +219,7 @@ export const PRESETS: Record<string, Recipe> = {
     gravity: 0.65, outward: 0.95, curl: 0.15, wiggle: 0.18, loopiness: 0.2,
     rings: 0.15, crown: 0.15, levels: 1, shell: 0,
     height: 1.1, spread: 1.5, tube: 0.095, taper: 0.15, blend: 0.1,
-    bulb: 1.2, open: 0, cup: 0.34, cupPos: 0.95, dish: 0, rimWave: 0,
+    bulb: 1.2, open: 0, spikes: 0, cup: 0.34, cupPos: 0.95, dish: 0, rimWave: 0,
   },
 }
 
@@ -672,6 +702,22 @@ function buildSkeleton(p: HolderParams): Skeleton {
   const cupPrims = sk.central.length
   const cupNegPrims = sk.centralNeg.length
 
+  // conical stud pointing along dir — sea-urchin armor
+  const spike = (base: V3, dir: V3, len: number, baseR: number) => {
+    const dl = Math.hypot(dir[0], dir[1], dir[2]) || 1
+    const tip: V3 = [
+      base[0] + (dir[0] / dl) * len,
+      base[1] + (dir[1] / dl) * len,
+      base[2] + (dir[2] / dl) * len,
+    ]
+    const mid: V3 = [
+      (base[0] + tip[0]) / 2,
+      (base[1] + tip[1]) / 2,
+      (base[2] + tip[2]) / 2,
+    ]
+    sk.wedge.push(tube([base, mid, tip], [baseR, baseR * 0.55, baseR * 0.12]))
+  }
+
   // a tip can close a ring to its own symmetry copies: with n-fold
   // replication one arc per wedge becomes a full circle
   const ringTo = (end: V3, rr: number) => {
@@ -683,6 +729,17 @@ function buildSkeleton(p: HolderParams): Skeleton {
       pts.push(pol(er, a0 - s / 2 + (s * i) / 6, end[1]))
     }
     sk.wedge.push(tube(pts, rr))
+    // studded rings: alternating out-up / out-down spikes
+    if (p.spikes > 0.05) {
+      const len = r0 * (1.6 + 2.6 * p.spikes)
+      for (const [da, up] of [
+        [-s * 0.25, 0.55],
+        [s * 0.25, -0.25],
+      ] as const) {
+        const b = pol(er, a0 + da, end[1])
+        spike(b, [b[0], up * er, b[2]], len, rr * 1.25)
+      }
+    }
   }
 
   // bowed connector between two skeleton points (used for apex knots)
@@ -838,17 +895,44 @@ function buildSkeleton(p: HolderParams): Skeleton {
     const sag = -p.gravity * chord * 0.18
     anchors.push(foot)
     if (rnd() < p.loopiness) {
-      // almond loop whose plane follows the chord: vertical chords open
-      // radially (edge-on clean from the side), horizontal chords open
-      // tangentially (flat petals)
-      const so = chord * (0.18 + 0.3 * p.branchSpread)
-      const vFrac = Math.min(1, Math.abs(foot[1] - seed[1]) / (chord || 1))
-      sk.wedge.push(
-        tube(arc(seed, foot, chordBow(chord) * 0.6 + so * vFrac, so * (1 - vFrac), sag, r0), r0),
-      )
-      sk.wedge.push(
-        tube(arc(seed, foot, chordBow(chord) * 0.6 - so * vFrac, -so * (1 - vFrac), sag * 0.6, r0), r0),
-      )
+      // almond loop: the two arcs bow along the TRUE perpendicular of the
+      // chord within its radial plane (cross product), so the eye always
+      // opens — steep legs open radially, flat petals open vertically —
+      // plus a tangential widening for flat petals
+      const dhx = (foot[0] - seed[0]) / (chord || 1)
+      const dhy = (foot[1] - seed[1]) / (chord || 1)
+      const dhz = (foot[2] - seed[2]) / (chord || 1)
+      const mx = (seed[0] + foot[0]) / 2
+      const mz = (seed[2] + foot[2]) / 2
+      const mr = Math.hypot(mx, mz) || 1
+      const rhx = mx / mr
+      const rhz = mz / mr
+      const thx = -rhz
+      const thz = rhx
+      // perp = chord x tangent, normalized
+      let px = dhy * thz
+      let py = dhz * thx - dhx * thz
+      let pz = -dhy * thx
+      const pl = Math.hypot(px, py, pz) || 1
+      px /= pl
+      py /= pl
+      pz /= pl
+      // orient the eye outward/upward
+      if (px * rhx + pz * rhz + py * 0.5 < 0) {
+        px = -px
+        py = -py
+        pz = -pz
+      }
+      const so = Math.max(chord * (0.18 + 0.3 * p.branchSpread), r0 * 4.5)
+      const flat = 1 - Math.min(1, Math.abs(dhy) * 1.4)
+      const ox = px * so + thx * so * 0.4 * flat
+      const oy = py * so
+      const oz = pz * so + thz * so * 0.4 * flat
+      const bowO = ox * rhx + oz * rhz
+      const bowT = ox * thx + oz * thz
+      const cb = chordBow(chord) * 0.6
+      sk.wedge.push(tube(arc(seed, foot, cb + bowO, bowT, sag + oy, r0), r0))
+      sk.wedge.push(tube(arc(seed, foot, cb - bowO, -bowT, sag * 0.7 - oy, r0), r0))
     } else {
       sk.wedge.push(tube(arc(seed, foot, chordBow(chord), 0, sag, r0), r0))
     }
@@ -857,10 +941,12 @@ function buildSkeleton(p: HolderParams): Skeleton {
       openTip(
         sk,
         foot,
-        lift ? [foot[0], 0.6, foot[2]] : [foot[0] * 0.55, -0.75, foot[2] * 0.55],
+        lift ? [foot[0] * 0.45, 1.15, foot[2] * 0.45] : [foot[0] * 0.55, -0.75, foot[2] * 0.55],
         r0,
         p.open,
       )
+    } else if (p.spikes > 0.05 && rnd() < p.spikes) {
+      spike(foot, [foot[0], 0.35, foot[2]], r0 * (1.6 + 2.4 * p.spikes), r0 * 1.2)
     } else if (rnd() < p.bulb * 0.6) {
       sk.wedge.push(sphere(foot, r0 * (1.2 + p.bulb * 0.5)))
     }
@@ -946,6 +1032,20 @@ function buildSkeleton(p: HolderParams): Skeleton {
       const punchR = r0 * (0.55 + 0.45 * p.open)
       sk.wedgeNeg.push(tube([pol(rx * 0.2, b, cy - ry * 0.55), pol(rx * 1.3, b, cy - ry * 0.48)], punchR))
       sk.wedgeNeg.push(tube([pol(rx * 0.15, b, cy + ry * 0.5), pol(rx * 1.25, b, cy + ry * 0.58)], punchR * 0.7))
+    }
+    // studded armor: two rows of conical spikes on the shell
+    if (p.spikes > 0.05) {
+      const len = Math.max(r0 * 2.2, rx * 0.34 * p.spikes)
+      for (const [da, t] of [
+        [0, 0.25],
+        [s * 0.5, 0.68],
+      ] as const) {
+        // point on the ellipsoid at height parameter t, angle m+da
+        const py = cy + ry * t * 0.9
+        const pr = rx * Math.sqrt(Math.max(0.05, 1 - t * t))
+        const b2 = pol(pr * 0.9, m + da, py)
+        spike(b2, [b2[0], t * rx * 1.6, b2[2]], len, r0 * 1.8)
+      }
     }
   }
 
