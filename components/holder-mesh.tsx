@@ -10,10 +10,12 @@ import type { HolderJob, HolderResult } from "@/lib/holder-worker"
 // resolution is expressed in cells per tube diameter — the detail that
 // matters. Coarse while dragging, refined once the parameters settle.
 // Phones get a lighter refine so regeneration never feels stuck.
+// the calmer shuffle coherence rules made builds ~30% cheaper, which
+// buys a crisper refine at the same wall-clock — sharper tube joints
 const PREVIEW_CPT = 3.6
-const REFINE_CPT_MOBILE = 6
-const REFINE_CPT = 8
-const REFINE_CPT_HI = 11
+const REFINE_CPT_MOBILE = 6.5
+const REFINE_CPT = 9
+const REFINE_CPT_HI = 12
 const REFINE_DELAY = 240
 
 const newWorker = () =>
@@ -23,10 +25,12 @@ export function HolderMesh({
   params,
   hiDetail,
   mobile,
+  onFit,
 }: {
   params: HolderParams
   hiDetail: boolean
   mobile: boolean
+  onFit?: (radius: number, centerY: number) => void
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
   const invalidate = useThree((s) => s.invalidate)
@@ -51,7 +55,13 @@ export function HolderMesh({
     // stand the holder on the floor plane at y = 0
     geo.computeBoundingBox()
     const bb = geo.boundingBox
-    if (bb) geo.translate(0, -bb.min.y, 0)
+    if (bb) {
+      geo.translate(0, -bb.min.y, 0)
+      // report the grounded piece's size so the camera can frame it
+      const w = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z)
+      const h = bb.max.y - bb.min.y
+      onFit?.(Math.hypot(w, h) / 2, h / 2)
+    }
     const old = mesh.geometry
     mesh.geometry = geo
     old?.dispose()
@@ -156,10 +166,10 @@ export function HolderMesh({
       {/* glazed ceramic: warm off-white body under a wet clearcoat */}
       <meshPhysicalMaterial
         color="#f3f0e9"
-        roughness={0.2}
+        roughness={0.18}
         metalness={0}
         clearcoat={1}
-        clearcoatRoughness={0.26}
+        clearcoatRoughness={0.22}
         envMapIntensity={1.05}
       />
     </mesh>
