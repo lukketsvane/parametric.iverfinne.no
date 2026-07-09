@@ -134,8 +134,8 @@ export const PRESETS: Record<string, Recipe> = {
     depth: 3, branches: 2, branchSpread: 0.55, length: 1.15, decay: 0.9,
     gravity: 0.95, outward: 0.7, curl: 0.08, wiggle: 0, loopiness: 1,
     rings: 0.12, crown: 0, levels: 1, shell: 0,
-    height: 1.95, spread: 1.1, tube: 0.092, taper: 0.08, blend: 0.08,
-    bulb: 0.25, open: 1, cup: 0.3, cupPos: 1, dish: 0.38, rimWave: 0.85,
+    height: 2.05, spread: 1.02, tube: 0.09, taper: 0.08, blend: 0.075,
+    bulb: 0.25, open: 1, cup: 0.3, cupPos: 1, dish: 0.42, rimWave: 0.72,
   },
   whisk: {
     candle: "kronelys",
@@ -274,11 +274,12 @@ type V3 = [number, number, number]
 type Sphere = { t: 1; x: number; y: number; z: number; r: number }
 /** vertical rounded cylinder: half-height h, edge rounding rd */
 type Cylinder = { t: 2; x: number; y: number; z: number; r: number; h: number; rd: number }
-/** wavy drip dish: horizontal plate at height y, wavy radius, upward rim curl */
+/** wavy drip dish: a thin cupped plate whose rim undulates VERTICALLY in
+    petals (vamp) with a subtle radius scallop (amp) and upward curl */
 type Dish = {
   t: 3
   y: number; r: number
-  amp: number; waves: number; phase: number
+  amp: number; vamp: number; waves: number; phase: number
   th: number; curve: number
 }
 /**
@@ -346,7 +347,11 @@ function evalPrim(p: Prim, x: number, y: number, z: number): number {
       const ang = Math.atan2(z, x)
       const rim = p.r * (1 + p.amp * Math.sin(p.waves * ang + p.phase))
       const nq = q / p.r
-      const surf = p.y + p.curve * nq * nq * p.r
+      // petals: the rim undulates vertically, growing toward the edge
+      const surf =
+        p.y +
+        p.curve * nq * nq * p.r +
+        p.vamp * Math.sin(p.waves * ang + p.phase) * nq * nq * nq
       const dv = Math.abs(y - surf) - p.th
       const dr = q - rim
       const mx = dv > dr ? dv : dr
@@ -395,13 +400,14 @@ function primBound(p: Prim): { x: number; y: number; z: number; br: number } {
       const rmax = p.r * (1 + p.amp)
       // the plate curls up as curve·(q/r)² — at the wavy rim q can reach
       // rmax, so bound the lift there or the dish gets clipped by the grid
-      const lift = (Math.abs(p.curve) * rmax * rmax) / p.r
+      const lift =
+        (Math.abs(p.curve) * rmax * rmax) / p.r + Math.abs(p.vamp) * 1.3
       const ymax = lift + p.th * 2
       return {
         x: 0,
         y: p.y + ymax / 2,
         z: 0,
-        br: Math.sqrt(rmax * rmax + ymax * ymax) + p.th,
+        br: Math.sqrt(rmax * rmax + ymax * ymax) + p.th + Math.abs(p.vamp),
       }
     }
     case 4: {
@@ -644,19 +650,21 @@ function buildSkeleton(p: HolderParams): Skeleton {
     rd: 0.03,
   })
   if (p.dish > 0.02) {
-    // the dish is one leaf per symmetry wedge, peaks aligned to the wedge
-    // centers so the whole piece shares a single Cn symmetry group; fewer
-    // leaves get proportionally deeper scallops so they read as petals
-    const waves = n
+    // the dish is a thin cupped plate whose rim curls into petals — one
+    // leaf per symmetry wedge (low orders get a doubled count so a 3-fold
+    // dish still reads as a flower, not a saddle), aligned to wedge centers
+    const waves = n < 5 ? n * 2 : n
+    const dishR = cupR * 1.2 + p.dish * (R * 0.75 - cupR)
     sk.central.push({
       t: 3,
-      y: cupY + cupH * 0.3,
-      r: cupR * 1.25 + p.dish * (R * 0.8 - cupR),
-      amp: (0.04 + p.rimWave * 0.1) * Math.sqrt(6 / waves),
+      y: cupY + cupH * 0.62,
+      r: dishR,
+      amp: 0.025 + p.rimWave * 0.03,
+      vamp: (0.05 + p.rimWave * 0.1) * dishR,
       waves,
       phase: Math.PI / 2 - waves * m,
-      th: 0.07,
-      curve: 0.2 + p.rimWave * 0.12,
+      th: 0.062,
+      curve: 0.18 + p.rimWave * 0.1,
     })
   }
 
@@ -777,32 +785,82 @@ function buildSkeleton(p: HolderParams): Skeleton {
   const rTip = Math.max(0.05, r0 * (1 - p.taper * 0.6))
   const chordBow = (c: number) => c * (0.22 + 0.38 * p.outward)
 
+  // the lattice hangs from a hub on a short stem under the cup (a crown
+  // replaces the hub as the attachment when present)
+  const hubY = p.crown > 0.03 ? seedY : seedY - Math.max(0.14, (seedY - yBot) * 0.16)
+  if (p.crown <= 0.03) {
+    // conical stem: swallows the candle collar and tapers to tube gauge,
+    // so nothing under the dish reads as a bare block
+    if (p.dish > 0.02) {
+      // trumpet: a bell skirt flowing from the dish underside over the
+      // candle collar and tapering into the stem — no exposed block
+      sk.central.push(
+        tube(
+          [
+            [0, cupY + cupH * 0.25, 0],
+            [0, cupY - cupH * 0.55, 0],
+            [0, (cupY + hubY) / 2 - cupH * 0.3, 0],
+            [0, hubY, 0],
+          ],
+          [cupR * 1.06, cupR * 0.85, (cupR + r0) * 0.38, r0 * 0.95],
+        ),
+      )
+    } else {
+      sk.central.push(
+        tube(
+          [
+            [0, cupY - cupH * 0.2, 0],
+            [0, (cupY + hubY) / 2, 0],
+            [0, hubY, 0],
+          ],
+          [r0 * 1.1, r0, r0 * 0.95],
+        ),
+      )
+    }
+  }
+  const hubR = p.crown > 0.03 ? seedR : r0 * 0.9
+
   // feet land on a ground ring (or a sky ring when lifting)
   const fR = R * (0.62 + 0.3 * p.outward) * Math.min(1.3, p.length)
   const yFoot = lift ? yTop - r0 * 1.5 : yBot + r0
   const anchors: V3[] = [[0, yTop - r0 * 1.5, 0]]
 
-  /* tier 0 — legs: teardrop loop pairs or single arcs, seed → foot */
+  /* tier 0 — legs: planar vertical almond loops or single arcs, hub → foot.
+     The two arcs of a loop live in the SAME radial plane with different
+     outward bows, so every loop reads edge-on clean from other angles. */
   for (let k = 0; k < arms; k++) {
     const off = arms > 1 ? (k - (arms - 1) / 2) * p.branchSpread * s * 0.8 : 0
     const a0 = m + off
-    const seed = pol(seedR, a0, seedY)
+    const seed = pol(hubR, a0, hubY)
     const fa = a0 + p.curl * s * 0.6
     const foot = pol(fR, fa, yFoot)
     const chord = Math.hypot(foot[0] - seed[0], foot[1] - seed[1], foot[2] - seed[2])
-    const sag = -p.gravity * chord * 0.22
+    const sag = -p.gravity * chord * 0.18
     anchors.push(foot)
     if (rnd() < p.loopiness) {
-      // a proper teardrop: two mirrored arcs meeting at both ends
-      const w = chord * (0.16 + 0.3 * p.branchSpread)
-      sk.wedge.push(tube(arc(seed, foot, chordBow(chord) * 0.5, w, sag, r0), r0))
-      sk.wedge.push(tube(arc(seed, foot, chordBow(chord) * 0.5, -w, sag, r0), r0))
+      // almond loop whose plane follows the chord: vertical chords open
+      // radially (edge-on clean from the side), horizontal chords open
+      // tangentially (flat petals)
+      const so = chord * (0.18 + 0.3 * p.branchSpread)
+      const vFrac = Math.min(1, Math.abs(foot[1] - seed[1]) / (chord || 1))
+      sk.wedge.push(
+        tube(arc(seed, foot, chordBow(chord) * 0.6 + so * vFrac, so * (1 - vFrac), sag, r0), r0),
+      )
+      sk.wedge.push(
+        tube(arc(seed, foot, chordBow(chord) * 0.6 - so * vFrac, -so * (1 - vFrac), sag * 0.6, r0), r0),
+      )
     } else {
       sk.wedge.push(tube(arc(seed, foot, chordBow(chord), 0, sag, r0), r0))
     }
-    // the foot: an open mouth into the ground, a pearl, or bare
+    // the foot: an open mouth angled into the ground, a pearl, or bare
     if (p.open > 0.05 && rnd() < p.open) {
-      openTip(sk, foot, lift ? [foot[0], 0.6, foot[2]] : [foot[0] * 0.3, -1, foot[2] * 0.3], r0, p.open)
+      openTip(
+        sk,
+        foot,
+        lift ? [foot[0], 0.6, foot[2]] : [foot[0] * 0.55, -0.75, foot[2] * 0.55],
+        r0,
+        p.open,
+      )
     } else if (rnd() < p.bulb * 0.6) {
       sk.wedge.push(sphere(foot, r0 * (1.2 + p.bulb * 0.5)))
     }
@@ -813,25 +871,38 @@ function buildSkeleton(p: HolderParams): Skeleton {
     }
   }
 
-  /* tier 1 — arches: foot-to-foot arcs between neighboring wedges */
+  /* tier 1 — arches: foot-to-foot arcs between neighboring wedges; their
+     apex at the wedge boundary is the crossing point later tiers build on */
+  let archApex: V3 | null = null
   if (tiers >= 2 && !lift) {
     const fa = m + p.curl * s * 0.6
     const foot = pol(fR, fa, yFoot)
     const next = pol(fR, fa + s, yFoot)
     const span = Math.hypot(next[0] - foot[0], next[2] - foot[2])
-    const hUp = span * (0.35 + 0.3 * p.decay)
-    sk.wedge.push(tube(arc(foot, next, span * 0.12, 0, hUp, rTip), rTip))
+    const hUp = span * (0.16 + 0.18 * p.decay)
+    const bowOut = span * 0.1
+    sk.wedge.push(tube(arc(foot, next, bowOut, 0, hUp, rTip), rTip))
+    // quadratic apex sits halfway toward the control point
+    archApex = pol(
+      fR * Math.cos(s / 2) + bowOut * 0.5,
+      fa + s / 2,
+      yFoot + hUp * 0.5,
+    )
   }
 
-  /* tier 2 — side arms: straight flared tubes reaching out at mid height */
+  /* tier 2 — side arms: flared mouths growing out of the arch crossings */
   if (tiers >= 3) {
-    const yMid = (seedY + yFoot) / 2
-    const b = m + s / 2
-    const inner = pol(Math.max(seedR * 0.8, fR * 0.35), b, yMid)
-    const tip = pol(R * 0.95 * Math.pow(p.decay, 1), b, yMid + R * 0.06)
-    sk.wedge.push(tube(arc(inner, tip, 0, 0, -R * 0.05, rTip), rTip))
+    const b = m + s / 2 + p.curl * s * 0.6
+    const base = archApex ?? pol(Math.max(hubR, fR * 0.4), b, (hubY + yFoot) / 2)
+    const armL = R * 0.3 * (0.6 + 0.8 * p.decay)
+    const tip: V3 = [
+      base[0] + (base[0] / (Math.hypot(base[0], base[2]) || 1)) * armL,
+      base[1] + armL * 0.25,
+      base[2] + (base[2] / (Math.hypot(base[0], base[2]) || 1)) * armL,
+    ]
+    sk.wedge.push(tube(arc(base, tip, 0, 0, -armL * 0.15, rTip), rTip))
     if (p.open > 0.05 && rnd() < Math.max(0.5, p.open)) {
-      openTip(sk, tip, [tip[0], 0.15, tip[2]], rTip, p.open)
+      openTip(sk, tip, [tip[0], 0.2, tip[2]], rTip, p.open)
     } else {
       sk.wedge.push(sphere(tip, rTip * (1.1 + p.bulb * 0.5)))
     }
