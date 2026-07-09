@@ -253,7 +253,9 @@ function snap(k: ParamKey, v: number): number {
 
 /** a preset verbatim — the seed only drives the growth randomness */
 export function genParams(seed: number, preset: string): HolderParams {
-  const base = PRESETS[preset] ?? PRESETS.bloom
+  const base = Object.prototype.hasOwnProperty.call(PRESETS, preset)
+    ? PRESETS[preset]
+    : PRESETS.bloom
   return { preset, seed, ...base }
 }
 
@@ -263,8 +265,12 @@ export function genParams(seed: number, preset: string): HolderParams {
  */
 export function randomizeParams(seed: number, preset: string): HolderParams {
   const rnd = mulberry32((seed * 2654435761 + 0x85ebca6b) >>> 0)
-  const base = { ...(PRESETS[preset] ?? PRESETS.bloom) }
-  const WILD = 0.6 // 0 = preset only, 1 = uniform over the whole range
+  const base = {
+    ...(Object.prototype.hasOwnProperty.call(PRESETS, preset)
+      ? PRESETS[preset]
+      : PRESETS.bloom),
+  }
+  const WILD = 0.45 // 0 = preset only, 1 = uniform over the whole range
   for (const k of Object.keys(PARAM_RANGES) as ParamKey[]) {
     const r = PARAM_RANGES[k]
     const uniform = r.min + rnd() * (r.max - r.min)
@@ -274,10 +280,18 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
   // a shuffle may surprise, but it must never stack every device at once.
   // The numbers come from batch curation: renders scored against the
   // reference photos, winners' parameter stats diffed against losers'.
-  base.wiggle = Math.min(base.wiggle, 0.35)
-  base.blend = Math.min(base.blend, base.tube * 1.2)
+  base.wiggle = Math.min(base.wiggle, 0.3)
   // dense growth needs slim tubes or everything fuses into a blob
-  if (base.depth * base.branches >= 6) base.tube = Math.min(base.tube, 0.11)
+  if (base.depth * base.branches >= 5) {
+    base.tube = Math.min(base.tube, 0.105)
+    base.loopiness = Math.min(base.loopiness, 0.55)
+    base.rings = Math.min(base.rings, 0.35)
+  }
+  // crisp joints: cap blend against the FINAL tube, after density trims
+  base.blend = Math.min(base.blend, base.tube)
+  // a high symmetry order already fills the circle — pair it with extra
+  // branches and the wall becomes a picket fence
+  if (base.symmetry >= 9) base.branches = 1
   // corkscrewing arms read as tangles, not structure
   base.curl = Math.max(-0.4, Math.min(base.curl, 0.4))
   // keep the silhouette inside a graceful footprint: wide + flaring = sprawl
@@ -309,12 +323,22 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
     base.crown = Math.min(base.crown, 0.4)
     base.dish = Math.min(base.dish, 0.3)
   }
-  // studs are seasoning, not a texture — and never on busy builds
-  if (base.depth * base.branches >= 6 || base.levels > 1)
-    base.spikes = Math.min(base.spikes, 0.3)
-  else base.spikes = Math.min(base.spikes, 0.6)
-  // the cup reads best riding high on the form
-  base.cupPos = Math.max(base.cupPos, 0.6)
+  // studs are a committed choice, not an accident: weak rolls scatter
+  // warty nubs over everything, so they snap to zero — a shuffle either
+  // wears real urchin armor or none at all (and never on busy builds)
+  if (base.spikes < 0.4 || base.depth * base.branches >= 5 || base.levels > 1)
+    base.spikes = 0
+  else base.spikes = Math.min(base.spikes, 0.7)
+  // same for pearls: a faint bulb roll leaves toy-like knobs on tube ends
+  if (base.bulb < 0.5) base.bulb = 0
+  else base.bulb = Math.min(base.bulb, 0.9)
+  // one top motif: a dish AND a crown stack into a jagged double rim
+  if (base.dish >= 0.25 && base.crown >= 0.25) {
+    if (base.dish >= base.crown) base.crown = 0.15
+    else base.dish = 0.15
+  }
+  // the cup reads best riding high on the form, and visibly so
+  base.cupPos = Math.max(base.cupPos, 0.7)
   if (base.cupPos < 0.75) base.dish = Math.min(base.dish, 0.2)
   // a squat melted puck helps nobody; neither does a leggy tower
   base.height = Math.max(0.85, Math.min(base.height, 2.1))
@@ -322,8 +346,8 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
   if (base.candle === "telys") base.height = Math.min(base.height, 1.25)
   for (const k of [
     "wiggle", "blend", "tube", "curl", "outward", "spread", "length",
-    "loopiness", "rings", "crown", "dish", "levels", "spikes", "cupPos",
-    "height",
+    "loopiness", "rings", "crown", "dish", "levels", "spikes", "bulb",
+    "branches", "cupPos", "height",
   ] as ParamKey[]) {
     base[k] = snap(k, base[k])
   }
@@ -565,7 +589,7 @@ function rotatePrim(p: Prim, a: number): Prim {
  * would get sliced at the fold horizon — so they are replicated explicitly
  * instead and moved to the central list.
  */
-function explodeWidePrims(sk: Skeleton, n: number, sector: number) {
+function explodeWidePrims(sk: Skeleton, n: number, sector: number, mirror: boolean) {
   const m = sector / 2
   // safe iff the prim stays within one sector of the wedge center — then
   // every sample's three fold candidates cover all copies that matter
@@ -576,7 +600,16 @@ function explodeWidePrims(sk: Skeleton, n: number, sector: number) {
     return a
   }
   const wide = (p: Prim): boolean => {
-    if (p.t !== 4) return false // spheres/cylinders/dishes have no span
+    if (p.t === 1 || p.t === 5) {
+      // point prims still have an angular POSITION (plus width from their
+      // radius): a bulb parked past the fold horizon would be sliced too
+      const d = Math.hypot(p.x, p.z)
+      if (d < 0.15) return false
+      const r = p.t === 1 ? p.r : p.rx
+      const half = Math.asin(Math.min(1, r / d))
+      return Math.abs(wrapPi(Math.atan2(p.z, p.x) - m)) + half > limit
+    }
+    if (p.t !== 4) return false // central cylinders/dishes have no span
     const s = p.segs
     let cum = Number.NaN
     let prevRaw = 0
@@ -604,6 +637,43 @@ function explodeWidePrims(sk: Skeleton, n: number, sector: number) {
     return hi > limit || lo < -limit
   }
 
+  // reflect across the wedge center plane θ = sector/2 — the same mirror
+  // the dihedral fold applies, so exploded prims keep their mirror twins
+  const reflectPrim = (p: Prim): Prim => {
+    const c = Math.cos(sector)
+    const sn = Math.sin(sector)
+    const rx = (x: number, z: number): [number, number] => [
+      x * c + z * sn,
+      x * sn - z * c,
+    ]
+    switch (p.t) {
+      case 1:
+      case 5: {
+        const [x, z] = rx(p.x, p.z)
+        return { ...p, x, z }
+      }
+      case 2: {
+        const [x, z] = rx(p.x, p.z)
+        return { ...p, x, z }
+      }
+      case 4: {
+        const segs = new Float32Array(p.segs)
+        for (let i = 0; i < p.n; i++) {
+          const o = i * 8
+          const [ax, az] = rx(segs[o], segs[o + 2])
+          const [dx, dz] = rx(segs[o + 3], segs[o + 5])
+          segs[o] = ax
+          segs[o + 2] = az
+          segs[o + 3] = dx
+          segs[o + 5] = dz
+        }
+        return { ...p, segs }
+      }
+      case 3:
+        return p
+    }
+  }
+
   for (const [list, neg] of [
     [sk.wedge, false],
     [sk.wedgeNeg, true],
@@ -613,7 +683,10 @@ function explodeWidePrims(sk: Skeleton, n: number, sector: number) {
       if (!wide(p)) continue
       list.splice(i, 1)
       const target = neg ? sk.centralNeg : sk.central
-      for (let k = 0; k < n; k++) target.push(rotatePrim(p, k * sector))
+      for (let k = 0; k < n; k++) {
+        target.push(rotatePrim(p, k * sector))
+        if (mirror) target.push(rotatePrim(reflectPrim(p), k * sector))
+      }
     }
   }
 }
@@ -704,7 +777,11 @@ function buildSkeleton(p: HolderParams): Skeleton {
   const minWall = 4 / MM_PER_UNIT
   const cupR = Math.max(p.cup, spec.socketR + minWall)
   const cupH = spec.cupHalfH
-  const cupY = Math.min(yBot + p.cupPos * H, yTop - cupH * 0.5)
+  // clamped so the cup never sinks below the ground plane on short bodies
+  const cupY = Math.max(
+    Math.min(yBot + p.cupPos * H, yTop - cupH * 0.5),
+    yBot + cupH * 0.6,
+  )
   sk.central.push({ t: 2, x: 0, y: cupY, z: 0, r: cupR, h: cupH, rd: r0 * 0.45 })
   // bore from the cup mouth down, leaving a floor under the candle
   const sockD = Math.min(spec.socketDepth, cupH * 2 - 2.5 / MM_PER_UNIT)
@@ -734,6 +811,7 @@ function buildSkeleton(p: HolderParams): Skeleton {
     h: (flameY1 - flameY0) / 2,
     rd: 0.05,
   })
+  let dishBore: { er: number; hy: number; rHole: number } | null = null
   if (p.dish > 0.02) {
     // the dish is a thin cupped plate whose rim curls into petals — one
     // leaf per symmetry wedge (low orders get a doubled count so a 3-fold
@@ -751,6 +829,31 @@ function buildSkeleton(p: HolderParams): Skeleton {
       th: 0.062,
       curve: 0.18 + p.rimWave * 0.1,
     })
+    // pierced petals, like the reference ruffle: with an open growth
+    // character each wedge's annulus gets a cutout between cup and rim
+    // (queued here, pushed after level stacking so copies stay unpierced).
+    // The bore must only ever pierce the PLATE: it sits in the petal
+    // valley (wedge boundary, away from the legs at wedge centers), stays
+    // small, hugs the plate vertically, and is skipped entirely whenever a
+    // crown ring, extra branches or a wide fan could cross it — severing
+    // structure would disconnect the piece.
+    if (
+      p.open > 0.25 &&
+      dishR - cupR > 0.26 &&
+      p.crown <= 0.03 &&
+      Math.round(p.branches) <= 2 &&
+      p.branchSpread <= 0.6
+    ) {
+      const rHole = Math.min(
+        (dishR - cupR) * 0.26,
+        dishR * Math.sin(s / 2) * 0.4,
+        0.11,
+      )
+      const er = Math.max(cupR * 1.08 + rHole, cupR + (dishR - cupR) * 0.45)
+      if (rHole > 0.035 && er + rHole < dishR * 0.82) {
+        dishBore = { er, hy: cupY + cupH * 0.62, rHole }
+      }
+    }
   }
 
   // the candle interface stays unique when the body is stacked in levels
@@ -834,13 +937,16 @@ function buildSkeleton(p: HolderParams): Skeleton {
     const yC = cupY + cupH * 0.2
     ringTo(pol(crownR, m - s / 2, yC), r0)
     sk.wedge.push(tube([pol(cupR * 0.85, m, yC), pol(crownR, m, yC)], r0 * 0.95))
-    if (p.open > 0.05) {
+    if (p.open > 0.05 && crownR - cupR > r0 * 1.5) {
       const b = m + s / 2
       const corner = pol(crownR, b, yC)
       sk.wedge.push(sphere(corner, r0 * 1.3))
+      // the bore stays outside the cup wall — a collapsed crown must
+      // never let it drill toward the socket
+      const boreIn = Math.max(crownR - r0 * 2.4, cupR + r0 * 0.6)
       sk.wedgeNeg.push(
         tube(
-          [pol(crownR - r0 * 2.4, b, yC), pol(crownR + r0 * 2.4, b, yC)],
+          [pol(boreIn, b, yC), pol(crownR + r0 * 2.4, b, yC)],
           r0 * (0.38 + 0.34 * p.open),
         ),
       )
@@ -932,8 +1038,10 @@ function buildSkeleton(p: HolderParams): Skeleton {
   }
   const hubR = p.crown > 0.03 ? seedR : r0 * 0.9
 
-  // feet land on a ground ring (or a sky ring when lifting)
-  const fR = R * (0.62 + 0.3 * p.outward) * Math.min(1.3, p.length)
+  // feet land on a ground ring (or a sky ring when lifting — which must
+  // clear the flame chimney, or the whole ring would be carved away)
+  let fR = R * (0.62 + 0.3 * p.outward) * Math.min(1.3, p.length)
+  if (lift) fR = Math.max(fR, flameR + r0 * 2.2)
   const yFoot = lift ? yTop - r0 * 1.5 : yBot + r0
   const anchors: V3[] = [[0, yTop - r0 * 1.5, 0]]
 
@@ -1007,8 +1115,17 @@ function buildSkeleton(p: HolderParams): Skeleton {
     }
     if (rnd() < p.rings * 0.7) ringTo(foot, r0 * 0.9)
     if (lift && rnd() < p.loopiness * 0.8) {
-      // rising limbs can close onto the axis — apex knots
-      closeLoop(foot, [0, yTop - r0, 0], rTip, undefined)
+      // rising limbs close onto an apex knot — but the flame chimney owns
+      // the axis above the cup mouth, so up there they land on a collar
+      // ring around the chimney instead of a point the carve would sever
+      const yApex = yTop - r0
+      if (yApex > flameY0 - rTip) {
+        const apex = pol(flameR + rTip * 1.6, fa, Math.max(yApex, flameY0 + rTip))
+        closeLoop(foot, apex, rTip, undefined)
+        if (k === 0) ringTo(apex, rTip)
+      } else {
+        closeLoop(foot, [0, yApex, 0], rTip, undefined)
+      }
     }
   }
 
@@ -1113,10 +1230,11 @@ function buildSkeleton(p: HolderParams): Skeleton {
     const baseC = sk.central.slice(cupPrims)
     const baseCN = sk.centralNeg.slice(cupNegPrims)
     // the lowest and highest off-axis anchors weld consecutive levels
+    // (any true off-axis point counts — a narrow foot ring must still weld)
     let lowA: V3 | null = null
     let highA: V3 | null = null
     for (const a of anchors) {
-      if (Math.hypot(a[0], a[2]) < 0.2) continue
+      if (Math.hypot(a[0], a[2]) < 0.05) continue
       if (!lowA || a[1] < lowA[1]) lowA = a
       if (!highA || a[1] > highA[1]) highA = a
     }
@@ -1149,9 +1267,23 @@ function buildSkeleton(p: HolderParams): Skeleton {
     }
   }
 
+  // the dish cutouts pierce only the true dish, never level copies —
+  // in the petal valley at the wedge boundary, clear of the legs
+  if (dishBore) {
+    sk.wedgeNeg.push(
+      tube(
+        [
+          pol(dishBore.er, m + s / 2, dishBore.hy - 0.16),
+          pol(dishBore.er, m + s / 2, dishBore.hy + 0.2),
+        ],
+        dishBore.rHole,
+      ),
+    )
+  }
+
   // anything reaching beyond the safe folding window gets replicated
   // explicitly so it can never be sliced at the fold horizon
-  explodeWidePrims(sk, n, s)
+  explodeWidePrims(sk, n, s, p.mirror >= 0.5)
 
   return sk
 }
