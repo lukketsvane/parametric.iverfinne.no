@@ -20,7 +20,10 @@ export function GestureParams({
   onNudge: (key: NudgeKey, deltaPx: number) => void
 }) {
   const gl = useThree((s) => s.gl)
-  const controls = useThree((s) => s.controls) as { enabled: boolean } | null
+  const controls = useThree((s) => s.controls) as {
+    enabled: boolean
+    target?: THREE.Vector3
+  } | null
   const camera = useThree((s) => s.camera)
   const invalidate = useThree((s) => s.invalidate)
 
@@ -71,7 +74,8 @@ export function GestureParams({
       }
       if (mode === "pinch") {
         if (last.d > 0 && c.d > 0) {
-          const target = new THREE.Vector3(0, 0.35, 0)
+          // dolly around wherever the auto-framing put the orbit target
+          const target = controls?.target?.clone() ?? new THREE.Vector3(0, 0.35, 0)
           const offset = camera.position.clone().sub(target)
           const dist = THREE.MathUtils.clamp(
             offset.length() * (last.d / c.d),

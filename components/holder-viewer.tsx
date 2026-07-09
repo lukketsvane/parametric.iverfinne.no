@@ -1,16 +1,49 @@
 "use client"
 
-import { Canvas } from "@react-three/fiber"
+import { Canvas, useThree } from "@react-three/fiber"
 import {
   ContactShadows,
   Environment,
   Lightformer,
   OrbitControls,
 } from "@react-three/drei"
-import { Suspense, useMemo, useRef } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import * as THREE from "three"
 import type { HolderParams } from "@/lib/candle-holder"
 import { HolderMesh } from "./holder-mesh"
 import { GestureParams, type NudgeKey } from "./gesture-params"
+
+/**
+ * Frame the piece whenever its size changes meaningfully: tall or wide
+ * designs used to overflow the fixed camera. The view direction the user
+ * chose is preserved — only the distance and target height adapt.
+ */
+function FitCamera({ fit }: { fit: { r: number; cy: number } | null }) {
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls) as
+    | { target: THREE.Vector3; update?: () => void }
+    | null
+  const invalidate = useThree((s) => s.invalidate)
+  const lastR = useRef(0)
+  useEffect(() => {
+    if (!fit || !controls) return
+    if (lastR.current && Math.abs(fit.r - lastR.current) / lastR.current < 0.12) return
+    lastR.current = fit.r
+    // the mesh is grounded at y=0 inside a group at y=-0.85
+    const ty = Math.min(1.2, Math.max(-0.05, fit.cy - 0.85 + 0.12))
+    controls.target.set(0, ty, 0)
+    const dist = Math.min(
+      15,
+      Math.max(3.2, (fit.r * 1.45) / Math.tan((16 * Math.PI) / 180)),
+    )
+    const dir = camera.position.clone().sub(controls.target)
+    if (dir.lengthSq() < 1e-6) dir.set(2.6, 1.85, 6.6)
+    camera.position.copy(controls.target).add(dir.setLength(dist))
+    controls.update?.()
+    invalidate()
+  }, [fit, controls, camera, invalidate])
+  return null
+}
 
 export function HolderViewer({
   params,
@@ -31,6 +64,8 @@ export function HolderViewer({
   const shadowSeq = useRef(0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const shadowKey = useMemo(() => ++shadowSeq.current, [params, dark])
+  // measured size of the current mesh, reported after each rebuild
+  const [fit, setFit] = useState<{ r: number; cy: number } | null>(null)
   return (
     <Canvas
       shadows
@@ -62,7 +97,12 @@ export function HolderViewer({
 
       <Suspense fallback={null}>
         <group position={[0, -0.85, 0]}>
-          <HolderMesh params={params} hiDetail={hiDetail} mobile={mobile} />
+          <HolderMesh
+            params={params}
+            hiDetail={hiDetail}
+            mobile={mobile}
+            onFit={(r, cy) => setFit({ r, cy })}
+          />
           {/* ground: an invisible plane that only receives the cast shadow —
               light mode only, dark mode floats the piece in the void */}
           {!dark && (
@@ -119,6 +159,7 @@ export function HolderViewer({
         </Environment>
       </Suspense>
 
+      <FitCamera fit={fit} />
       <GestureParams onNudge={onNudge} />
       <OrbitControls
         target={[0, 0.35, 0]}
