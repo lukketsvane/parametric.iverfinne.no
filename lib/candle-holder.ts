@@ -320,6 +320,18 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
     const reach = base.length * (0.5 + base.decay) * base.spread
     if (reach > 1.55) base.length = 1.55 / ((0.5 + base.decay) * base.spread)
   }
+  // a low, wide, long-armed build collapses into a flat web on the floor —
+  // keep the silhouette's width-to-height ratio inside a vessel's
+  const flat = (base.spread * Math.max(1, base.length)) / base.height
+  if (flat > 1.5) {
+    base.length = Math.min(
+      base.length,
+      Math.max(1, (1.5 * base.height) / base.spread),
+    )
+    if ((base.spread * Math.max(1, base.length)) / base.height > 1.5) {
+      base.spread = (1.5 * base.height) / Math.max(1, base.length)
+    }
+  }
   if (base.shell > 0.25) {
     base.loopiness = Math.min(base.loopiness, 0.5)
     base.rings = Math.min(base.rings, 0.4)
