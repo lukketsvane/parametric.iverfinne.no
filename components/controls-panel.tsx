@@ -43,6 +43,7 @@ const SECTIONS: Section[] = [
       { key: "loopiness", label: "Loops" },
       { key: "rings", label: "Rings" },
       { key: "crown", label: "Crown" },
+      { key: "levels", label: "Levels" },
     ],
   },
   {
