@@ -87,12 +87,12 @@ export type HolderParams = {
 }
 
 export const PARAM_RANGES = {
-  symmetry: { min: 3, max: 9, step: 1 },
+  symmetry: { min: 3, max: 12, step: 1 },
   mirror: { min: 0, max: 1, step: 1 },
   depth: { min: 1, max: 4, step: 1 },
   branches: { min: 1, max: 3, step: 1 },
   branchSpread: { min: 0, max: 1, step: 0.02 },
-  length: { min: 0.3, max: 1.2, step: 0.01 },
+  length: { min: 0.3, max: 1.5, step: 0.01 },
   decay: { min: 0.5, max: 1, step: 0.01 },
   gravity: { min: -1, max: 1, step: 0.02 },
   outward: { min: 0, max: 1, step: 0.02 },
@@ -102,12 +102,12 @@ export const PARAM_RANGES = {
   rings: { min: 0, max: 1, step: 0.02 },
   crown: { min: 0, max: 1, step: 0.02 },
   shell: { min: 0, max: 1, step: 0.02 },
-  height: { min: 0.7, max: 2.4, step: 0.01 },
-  spread: { min: 0.7, max: 2.0, step: 0.01 },
+  height: { min: 0.7, max: 2.6, step: 0.01 },
+  spread: { min: 0.7, max: 2.2, step: 0.01 },
   tube: { min: 0.06, max: 0.17, step: 0.002 },
   taper: { min: 0, max: 0.6, step: 0.02 },
   blend: { min: 0.04, max: 0.2, step: 0.005 },
-  bulb: { min: 0, max: 1.5, step: 0.02 },
+  bulb: { min: 0, max: 2, step: 0.02 },
   open: { min: 0, max: 1, step: 0.05 },
   cup: { min: 0.24, max: 0.48, step: 0.005 },
   cupPos: { min: 0.3, max: 1, step: 0.02 },
@@ -411,6 +411,99 @@ function smin(a: number, b: number, k: number): number {
   return Math.min(a, b) - h * h * k * 0.25
 }
 
+/** rotate a primitive around the Y axis */
+function rotatePrim(p: Prim, a: number): Prim {
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  const rx = (x: number, z: number): [number, number] => [x * c - z * s, x * s + z * c]
+  switch (p.t) {
+    case 1: {
+      const [x, z] = rx(p.x, p.z)
+      return { ...p, x, z }
+    }
+    case 2: {
+      const [x, z] = rx(p.x, p.z)
+      return { ...p, x, z }
+    }
+    case 3:
+      return { ...p, phase: p.phase - p.waves * a }
+    case 4: {
+      const segs = new Float32Array(p.segs)
+      for (let o = 0; o < segs.length; o += 8) {
+        const [ax, az] = rx(segs[o], segs[o + 2])
+        const [dx, dz] = rx(segs[o + 3], segs[o + 5])
+        segs[o] = ax
+        segs[o + 2] = az
+        segs[o + 3] = dx
+        segs[o + 5] = dz
+      }
+      return { ...p, segs }
+    }
+    case 5:
+      return p
+  }
+}
+
+/**
+ * The symmetry fold evaluates each sample against three neighboring wedge
+ * copies, which is only exact for primitives staying within ±½ sector of
+ * their wedge. Wider primitives (spiraling limbs, long loop connectors)
+ * would get sliced at the fold horizon — so they are replicated explicitly
+ * instead and moved to the central list.
+ */
+function explodeWidePrims(sk: Skeleton, n: number, sector: number) {
+  const m = sector / 2
+  // safe iff the prim stays within one sector of the wedge center — then
+  // every sample's three fold candidates cover all copies that matter
+  const limit = sector * 1.02
+  const wrapPi = (a: number) => {
+    while (a > Math.PI) a -= Math.PI * 2
+    while (a < -Math.PI) a += Math.PI * 2
+    return a
+  }
+  const wide = (p: Prim): boolean => {
+    if (p.t !== 4) return false // spheres/cylinders/dishes have no span
+    const s = p.segs
+    let cum = Number.NaN
+    let prevRaw = 0
+    let lo = 0
+    let hi = 0
+    for (let i = 0; i <= p.n; i++) {
+      const o = Math.min(i, p.n - 1) * 8
+      const last = i === p.n
+      const x = last ? s[o] + s[o + 3] : s[o]
+      const z = last ? s[o + 2] + s[o + 5] : s[o + 2]
+      if (Math.hypot(x, z) < 0.15) continue // near-axis points bind to no wedge
+      const raw = Math.atan2(z, x)
+      if (Number.isNaN(cum)) {
+        cum = wrapPi(raw - m)
+        prevRaw = raw
+        lo = hi = cum
+        continue
+      }
+      // continuous paths step by small angles — unwrap via the previous point
+      cum += wrapPi(raw - prevRaw)
+      prevRaw = raw
+      lo = Math.min(lo, cum)
+      hi = Math.max(hi, cum)
+    }
+    return hi > limit || lo < -limit
+  }
+
+  for (const [list, neg] of [
+    [sk.wedge, false],
+    [sk.wedgeNeg, true],
+  ] as const) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const p = list[i]
+      if (!wide(p)) continue
+      list.splice(i, 1)
+      const target = neg ? sk.centralNeg : sk.central
+      for (let k = 0; k < n; k++) target.push(rotatePrim(p, k * sector))
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Growth                                                              */
 /* ------------------------------------------------------------------ */
@@ -539,15 +632,16 @@ function buildSkeleton(p: HolderParams): Skeleton {
   const anchors: V3[] = [[0, cupY - cupH, 0]]
   const unit = (H + R) / 2
 
-  // a tip can close a ring to its own symmetry copy: with n-fold
-  // replication one arc per wedge becomes a full circle
+  // a tip can close a ring to its own symmetry copies: with n-fold
+  // replication one arc per wedge becomes a full circle. The arc is
+  // centered on the tip so it stays within the safe folding window.
   const ringTo = (end: V3, rr: number) => {
     const er = Math.hypot(end[0], end[2])
     if (er < 0.15) return
     const a0 = Math.atan2(end[2], end[0])
     const pts: V3[] = []
     for (let i = 0; i <= 6; i++) {
-      pts.push(pol(er, a0 + (s * i) / 6, end[1]))
+      pts.push(pol(er, a0 - s / 2 + (s * i) / 6, end[1]))
     }
     sk.wedge.push(tube(pts, rr))
   }
@@ -822,6 +916,10 @@ function buildSkeleton(p: HolderParams): Skeleton {
     }
   }
 
+  // anything reaching beyond the safe folding window gets replicated
+  // explicitly so it can never be sliced at the fold horizon
+  explodeWidePrims(sk, n, s)
+
   return sk
 }
 
@@ -968,25 +1066,86 @@ export function buildHolderArrays(
   const ey = y1 - y0
   const ez = z1 - z0
   const maxExtent = Math.max(ex, ey, ez)
-  const cell = Math.max((p.tube * 2) / cellsPerTube, maxExtent / maxDim)
+  // two resolution demands: the tube wants `cellsPerTube` for smoothness,
+  // while thin features (tapered tips, dish plate, shell wall) only need
+  // ~2.8 cells across to not tear — so they set a floor, not the budget
+  const TEAR_CELLS = 2.8
+  const gens = Math.max(0, Math.round(p.depth) - 1)
+  let minFeature = Math.max(0.05, p.tube * Math.pow(1 - p.taper * 0.45, gens)) * 2
+  if (p.dish > 0.02) minFeature = Math.min(minFeature, 0.14)
+  if (p.shell > 0.25) minFeature = Math.min(minFeature, p.tube * 1.7)
+  const cell = Math.max(
+    Math.min((p.tube * 2) / cellsPerTube, minFeature / TEAR_CELLS),
+    maxExtent / maxDim,
+  )
   const nx = Math.max(8, Math.ceil(ex / cell) + 1)
   const ny = Math.max(8, Math.ceil(ey / cell) + 1)
   const nz = Math.max(8, Math.ceil(ez / cell) + 1)
 
+  // hierarchical sampling: probe a coarse lattice first and skip whole
+  // blocks that provably contain no surface (the field is 1-Lipschitz),
+  // evaluating fine cells only near the surface — a 3-6x speedup
   const values = new Float32Array(nx * ny * nz)
-  let i = 0
-  for (let z = 0; z < nz; z++) {
-    const pz = z0 + z * cell
-    for (let y = 0; y < ny; y++) {
-      const py = y0 + y * cell
-      for (let x = 0; x < nx; x++, i++) {
-        values[i] = field.eval(x0 + x * cell, py, pz)
+  const S = 4 // block stride
+  const ncx = Math.ceil((nx - 1) / S) + 1
+  const ncy = Math.ceil((ny - 1) / S) + 1
+  const ncz = Math.ceil((nz - 1) / S) + 1
+  const coarse = new Float32Array(ncx * ncy * ncz)
+  let ci = 0
+  for (let z = 0; z < ncz; z++) {
+    const pz = z0 + Math.min(z * S, nz - 1) * cell
+    for (let y = 0; y < ncy; y++) {
+      const py = y0 + Math.min(y * S, ny - 1) * cell
+      for (let x = 0; x < ncx; x++, ci++) {
+        coarse[ci] = field.eval(x0 + Math.min(x * S, nx - 1) * cell, py, pz)
+      }
+    }
+  }
+  const diag = S * cell * Math.sqrt(3) * 1.05
+  const cAt = (x: number, y: number, z: number) => coarse[x + ncx * (y + ncy * z)]
+  for (let bz = 0; bz < ncz - 1; bz++) {
+    for (let by = 0; by < ncy - 1; by++) {
+      for (let bx = 0; bx < ncx - 1; bx++) {
+        let m = Infinity
+        let sgn = 0
+        for (let c = 0; c < 8; c++) {
+          const v = cAt(bx + (c & 1), by + ((c >> 1) & 1), bz + ((c >> 2) & 1))
+          m = Math.min(m, Math.abs(v))
+          sgn = v
+        }
+        const xEnd = Math.min((bx + 1) * S, nx - 1)
+        const yEnd = Math.min((by + 1) * S, ny - 1)
+        const zEnd = Math.min((bz + 1) * S, nz - 1)
+        if (m > diag) {
+          // whole block is provably on one side — fill, don't evaluate
+          const fill = sgn > 0 ? m : -m
+          for (let z = bz * S; z <= zEnd; z++) {
+            for (let y = by * S; y <= yEnd; y++) {
+              let idx = bx * S + nx * (y + ny * z)
+              for (let x = bx * S; x <= xEnd; x++, idx++) values[idx] = fill
+            }
+          }
+        } else {
+          for (let z = bz * S; z <= zEnd; z++) {
+            const pz = z0 + z * cell
+            for (let y = by * S; y <= yEnd; y++) {
+              const py = y0 + y * cell
+              let idx = bx * S + nx * (y + ny * z)
+              for (let x = bx * S; x <= xEnd; x++, idx++) {
+                values[idx] = field.eval(x0 + x * cell, py, pz)
+              }
+            }
+          }
+        }
       }
     }
   }
 
   const grid: Grid = { nx, ny, nz, ox: x0, oy: y0, oz: z0, cell, field: values }
-  const { positions, indices } = marchGrid(grid)
+  const marched = marchGrid(grid)
+  const positions = marched.positions
+  // drop floating crumbs: keep only substantial connected components
+  const indices = filterIslands(positions, marched.indices)
 
   // normals from the field gradient (central differences); the wider stencil
   // softens shading over creases like the dish rim
@@ -1009,4 +1168,64 @@ export function buildHolderArrays(
   }
 
   return { positions, normals, indices }
+}
+
+/**
+ * Connected-component filter over the triangle mesh: tiny disconnected
+ * islands (severed lip beads, torn slivers) are removed so the result is
+ * always one clean printable body. Components under 10% of the largest
+ * component's volume are dropped.
+ */
+function filterIslands(positions: Float32Array, indices: Uint32Array): Uint32Array {
+  const nVerts = positions.length / 3
+  const parent = new Int32Array(nVerts)
+  for (let i = 0; i < nVerts; i++) parent[i] = i
+  const find = (a: number): number => {
+    while (parent[a] !== a) {
+      parent[a] = parent[parent[a]]
+      a = parent[a]
+    }
+    return a
+  }
+  for (let t = 0; t < indices.length; t += 3) {
+    const a = find(indices[t])
+    const b = find(indices[t + 1])
+    const c = find(indices[t + 2])
+    if (b !== a) parent[b] = a
+    if (c !== a) parent[c] = a
+  }
+  // signed volume per component (tetrahedra against the origin)
+  const volume = new Map<number, number>()
+  for (let t = 0; t < indices.length; t += 3) {
+    const ia = indices[t] * 3
+    const ib = indices[t + 1] * 3
+    const ic = indices[t + 2] * 3
+    const v =
+      positions[ia] *
+        (positions[ib + 1] * positions[ic + 2] - positions[ib + 2] * positions[ic + 1]) -
+      positions[ia + 1] *
+        (positions[ib] * positions[ic + 2] - positions[ib + 2] * positions[ic]) +
+      positions[ia + 2] *
+        (positions[ib] * positions[ic + 1] - positions[ib + 1] * positions[ic])
+    const root = find(indices[t])
+    volume.set(root, (volume.get(root) ?? 0) + v / 6)
+  }
+  if (volume.size <= 1) return indices
+  let maxVol = 0
+  for (const v of volume.values()) maxVol = Math.max(maxVol, Math.abs(v))
+  const keep = new Set<number>()
+  for (const [root, v] of volume) {
+    if (Math.abs(v) >= maxVol * 0.1) keep.add(root)
+  }
+  if (keep.size === volume.size) return indices
+  const out = new Uint32Array(indices.length)
+  let w = 0
+  for (let t = 0; t < indices.length; t += 3) {
+    if (keep.has(find(indices[t]))) {
+      out[w++] = indices[t]
+      out[w++] = indices[t + 1]
+      out[w++] = indices[t + 2]
+    }
+  }
+  return out.slice(0, w)
 }

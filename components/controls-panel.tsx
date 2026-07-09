@@ -162,6 +162,8 @@ export function ControlsPanel({
 
   const shuffle = () => {
     const next = randomizeParams(randomSeed(), params.preset)
+    // the candle is a functional choice, never randomized away
+    next.candle = params.candle
     for (const k of locked) next[k] = params[k]
     onChange(next)
   }
