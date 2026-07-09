@@ -1,9 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { DEFAULT_PARAMS, type HolderParams } from "@/lib/candle-holder"
+import { useCallback, useEffect, useState } from "react"
+import { DEFAULT_PARAMS, PARAM_RANGES, type HolderParams } from "@/lib/candle-holder"
 import { HolderViewer } from "./holder-viewer"
 import { ControlsPanel } from "./controls-panel"
+import type { NudgeKey } from "./gesture-params"
+
+// pixels of two-finger scroll to sweep a parameter's full range
+const NUDGE_RANGE_PX = 420
 
 // follow the system color scheme only — no in-app toggle
 function useSystemDark() {
@@ -41,6 +45,18 @@ export function Studio() {
   // avoid SSR of the WebGL canvas
   useEffect(() => setMounted(true), [])
 
+  // two-finger scroll: vertical sets height, horizontal sets radius
+  const nudge = useCallback((key: NudgeKey, deltaPx: number) => {
+    setParams((p) => {
+      const r = PARAM_RANGES[key]
+      const v = Math.min(
+        r.max,
+        Math.max(r.min, p[key] + (deltaPx / NUDGE_RANGE_PX) * (r.max - r.min)),
+      )
+      return { ...p, [key]: +v.toFixed(3) }
+    })
+  }, [])
+
   // never leave hi-detail on for a non-desktop client
   const detailOn = hiDetail && isDesktop
 
@@ -53,6 +69,7 @@ export function Studio() {
             dark={dark}
             hiDetail={detailOn}
             mobile={!isDesktop}
+            onNudge={nudge}
           />
         )}
       </div>

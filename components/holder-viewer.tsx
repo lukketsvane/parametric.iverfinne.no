@@ -10,17 +10,20 @@ import {
 import { Suspense, useMemo, useRef } from "react"
 import type { HolderParams } from "@/lib/candle-holder"
 import { HolderMesh } from "./holder-mesh"
+import { GestureParams, type NudgeKey } from "./gesture-params"
 
 export function HolderViewer({
   params,
   dark,
   hiDetail,
   mobile,
+  onNudge,
 }: {
   params: HolderParams
   dark: boolean
   hiDetail: boolean
   mobile: boolean
+  onNudge: (key: NudgeKey, deltaPx: number) => void
 }) {
   const bg = dark ? "#000000" : "#ffffff"
   const shadow = hiDetail ? 2048 : 1024
@@ -116,6 +119,7 @@ export function HolderViewer({
         </Environment>
       </Suspense>
 
+      <GestureParams onNudge={onNudge} />
       <OrbitControls
         target={[0, 0.35, 0]}
         enablePan={false}
