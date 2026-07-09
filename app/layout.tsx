@@ -3,9 +3,26 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://parametric.iverfinne.no'),
   title: 'Candle Holder Builder — iverfinne.no',
   description:
     'A parametric builder for organic candle stick holders — symmetries, booleans and lattices meshed into printable ceramic-like forms.',
+  openGraph: {
+    title: 'Candle Holder Builder',
+    description:
+      'A parametric builder for organic candle stick holders — symmetries, booleans and lattices meshed into printable ceramic-like forms.',
+    url: 'https://parametric.iverfinne.no',
+    siteName: 'Candle Holder Builder',
+    images: [{ url: '/og.png', width: 1300, height: 630, alt: 'A glossy white ruffled ceramic tealight holder on black' }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Candle Holder Builder',
+    description:
+      'Parametric organic candle holders — symmetries, booleans and lattices.',
+    images: ['/og.png'],
+  },
   generator: 'v0.app',
   manifest: '/manifest.json',
   appleWebApp: {

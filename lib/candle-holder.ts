@@ -271,22 +271,60 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
     base[k] = snap(k, base[k] + (uniform - base[k]) * WILD)
   }
   // coherence: calm curves, crisp joints, one dominant structural motif —
-  // a shuffle may surprise, but it must never stack every device at once
+  // a shuffle may surprise, but it must never stack every device at once.
+  // The numbers come from batch curation: renders scored against the
+  // reference photos, winners' parameter stats diffed against losers'.
   base.wiggle = Math.min(base.wiggle, 0.35)
   base.blend = Math.min(base.blend, base.tube * 1.2)
+  // dense growth needs slim tubes or everything fuses into a blob
+  if (base.depth * base.branches >= 6) base.tube = Math.min(base.tube, 0.11)
+  // corkscrewing arms read as tangles, not structure
+  base.curl = Math.max(-0.4, Math.min(base.curl, 0.4))
+  // keep the silhouette inside a graceful footprint: wide + flaring = sprawl
+  if (base.spread * (1 + base.outward) > 2.4) {
+    base.outward = Math.min(base.outward, 0.55)
+    base.spread = Math.min(base.spread, 2.4 / (1 + base.outward))
+  }
+  // deep growth with long, barely-decaying arms on a wide base radiates
+  // flat tentacles along the ground — bound the total arm reach instead
+  if (base.depth >= 3) {
+    const reach = base.length * (0.5 + base.decay) * base.spread
+    if (reach > 1.55) base.length = 1.55 / ((0.5 + base.decay) * base.spread)
+  }
   if (base.shell > 0.25) {
     base.loopiness = Math.min(base.loopiness, 0.5)
     base.rings = Math.min(base.rings, 0.4)
     base.crown = Math.min(base.crown, 0.3)
     base.dish = Math.min(base.dish, 0.3)
-    base.levels = Math.min(base.levels, 2)
   }
+  // stacked levels fail most shuffles: only keep them for short, sparse,
+  // calm builds — otherwise collapse to one level
   if (base.levels > 1) {
+    const calm =
+      base.height <= 1.35 &&
+      base.depth <= 2 &&
+      base.spikes <= 0.3 &&
+      base.shell <= 0.25
+    if (!calm) base.levels = 1
     base.crown = Math.min(base.crown, 0.4)
     base.dish = Math.min(base.dish, 0.3)
   }
+  // studs are seasoning, not a texture — and never on busy builds
+  if (base.depth * base.branches >= 6 || base.levels > 1)
+    base.spikes = Math.min(base.spikes, 0.3)
+  else base.spikes = Math.min(base.spikes, 0.6)
+  // the cup reads best riding high on the form
+  base.cupPos = Math.max(base.cupPos, 0.6)
   if (base.cupPos < 0.75) base.dish = Math.min(base.dish, 0.2)
-  for (const k of ["wiggle", "blend", "loopiness", "rings", "crown", "dish", "levels"] as ParamKey[]) {
+  // a squat melted puck helps nobody; neither does a leggy tower
+  base.height = Math.max(0.85, Math.min(base.height, 2.1))
+  // a tealight holder is a low object — cap its height
+  if (base.candle === "telys") base.height = Math.min(base.height, 1.25)
+  for (const k of [
+    "wiggle", "blend", "tube", "curl", "outward", "spread", "length",
+    "loopiness", "rings", "crown", "dish", "levels", "spikes", "cupPos",
+    "height",
+  ] as ParamKey[]) {
     base[k] = snap(k, base[k])
   }
   return { preset, seed, ...base }
@@ -690,7 +728,7 @@ function buildSkeleton(p: HolderParams): Skeleton {
       y: cupY + cupH * 0.62,
       r: dishR,
       amp: 0.025 + p.rimWave * 0.03,
-      vamp: (0.05 + p.rimWave * 0.1) * dishR,
+      vamp: (0.05 + p.rimWave * 0.14) * dishR,
       waves,
       phase: Math.PI / 2 - waves * m,
       th: 0.062,
