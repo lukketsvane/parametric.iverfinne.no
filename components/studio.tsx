@@ -42,8 +42,33 @@ export function Studio() {
   const dark = useSystemDark()
   const isDesktop = useIsDesktop()
 
-  // avoid SSR of the WebGL canvas
-  useEffect(() => setMounted(true), [])
+  // avoid SSR of the WebGL canvas; restore a shared design from the URL
+  useEffect(() => {
+    setMounted(true)
+    try {
+      const h = window.location.hash.slice(1)
+      if (h.startsWith("p=")) {
+        const obj = JSON.parse(decodeURIComponent(h.slice(2)))
+        if (obj && typeof obj === "object") {
+          setParams((prev) => ({ ...prev, ...obj }))
+        }
+      }
+    } catch {
+      // malformed hash — ignore
+    }
+  }, [])
+
+  // keep the URL shareable: it always encodes the current design
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      window.history.replaceState(
+        null,
+        "",
+        "#p=" + encodeURIComponent(JSON.stringify(params)),
+      )
+    }, 400)
+    return () => window.clearTimeout(id)
+  }, [params])
 
   // two-finger scroll: vertical sets height, horizontal sets radius
   const nudge = useCallback((key: NudgeKey, deltaPx: number) => {
