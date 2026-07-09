@@ -717,6 +717,23 @@ function buildSkeleton(p: HolderParams): Skeleton {
     h: sockD / 2 + 0.06,
     rd: 0.03,
   })
+  // nothing may roof the flame: an open chimney is carved from just above
+  // the cup mouth to beyond the tallest possible stack, as physically real
+  // as the socket itself. It starts 2 mm above the rim so the cup mouth
+  // keeps its full wall, and clears Ø45 mm over a tealight / Ø25 mm along
+  // a taper's body.
+  const flameR = spec.socketR * 1.1
+  const flameY0 = cupY + cupH + 0.04
+  const flameY1 = yTop + H * 3 + 1.5
+  sk.centralNeg.push({
+    t: 2,
+    x: 0,
+    y: (flameY0 + flameY1) / 2,
+    z: 0,
+    r: flameR,
+    h: (flameY1 - flameY0) / 2,
+    rd: 0.05,
+  })
   if (p.dish > 0.02) {
     // the dish is a thin cupped plate whose rim curls into petals — one
     // leaf per symmetry wedge (low orders get a doubled count so a 3-fold
@@ -1360,8 +1377,18 @@ export function buildHolderArrays(
   const grid: Grid = { nx, ny, nz, ox: x0, oy: y0, oz: z0, cell, field: values }
   const marched = marchGrid(grid)
   const positions = marched.positions
-  // drop floating crumbs: keep only substantial connected components
-  const indices = filterIslands(positions, marched.indices)
+  // a candle holder is ONE printable body: keep only the connected
+  // component that carries the cup, dropping crumbs and loose ornaments
+  const specA = CANDLE_SPECS[p.candle] ?? CANDLE_SPECS.kronelys
+  const cupYA = Math.min(
+    -p.height / 2 + p.cupPos * p.height,
+    p.height / 2 - specA.cupHalfH * 0.5,
+  )
+  const indices = filterIslands(positions, marched.indices, [
+    0,
+    cupYA - specA.cupHalfH * 0.6,
+    0,
+  ])
 
   // normals from the field gradient (central differences); the wider stencil
   // softens shading over creases like the dish rim
@@ -1387,13 +1414,19 @@ export function buildHolderArrays(
 }
 
 /**
- * Connected-component filter over the triangle mesh: tiny disconnected
- * islands (severed lip beads, torn slivers) are removed so the result is
- * always one clean printable body. Components under 30% of the largest
- * component's volume are dropped.
+ * Connected-component filter over the triangle mesh: the finished piece
+ * must be ONE printable body, so only the component containing the cup
+ * survives — floating crumbs, severed slivers and even large detached
+ * ornaments are all dropped. `anchor` is a point inside the cup's solid
+ * wall; the component of the vertex nearest to it is the holder.
  */
-function filterIslands(positions: Float32Array, indices: Uint32Array): Uint32Array {
+function filterIslands(
+  positions: Float32Array,
+  indices: Uint32Array,
+  anchor: [number, number, number],
+): Uint32Array {
   const nVerts = positions.length / 3
+  if (nVerts === 0) return indices
   const parent = new Int32Array(nVerts)
   for (let i = 0; i < nVerts; i++) parent[i] = i
   const find = (a: number): number => {
@@ -1410,38 +1443,28 @@ function filterIslands(positions: Float32Array, indices: Uint32Array): Uint32Arr
     if (b !== a) parent[b] = a
     if (c !== a) parent[c] = a
   }
-  // signed volume per component (tetrahedra against the origin)
-  const volume = new Map<number, number>()
-  for (let t = 0; t < indices.length; t += 3) {
-    const ia = indices[t] * 3
-    const ib = indices[t + 1] * 3
-    const ic = indices[t + 2] * 3
-    const v =
-      positions[ia] *
-        (positions[ib + 1] * positions[ic + 2] - positions[ib + 2] * positions[ic + 1]) -
-      positions[ia + 1] *
-        (positions[ib] * positions[ic + 2] - positions[ib + 2] * positions[ic]) +
-      positions[ia + 2] *
-        (positions[ib] * positions[ic + 1] - positions[ib + 1] * positions[ic])
-    const root = find(indices[t])
-    volume.set(root, (volume.get(root) ?? 0) + v / 6)
+  let best = 0
+  let bestD = Infinity
+  for (let i = 0; i < nVerts; i++) {
+    const dx = positions[i * 3] - anchor[0]
+    const dy = positions[i * 3 + 1] - anchor[1]
+    const dz = positions[i * 3 + 2] - anchor[2]
+    const d = dx * dx + dy * dy + dz * dz
+    if (d < bestD) {
+      bestD = d
+      best = i
+    }
   }
-  if (volume.size <= 1) return indices
-  let maxVol = 0
-  for (const v of volume.values()) maxVol = Math.max(maxVol, Math.abs(v))
-  const keep = new Set<number>()
-  for (const [root, v] of volume) {
-    if (Math.abs(v) >= maxVol * 0.3) keep.add(root)
-  }
-  if (keep.size === volume.size) return indices
+  const keep = find(best)
   const out = new Uint32Array(indices.length)
   let w = 0
   for (let t = 0; t < indices.length; t += 3) {
-    if (keep.has(find(indices[t]))) {
+    if (find(indices[t]) === keep) {
       out[w++] = indices[t]
       out[w++] = indices[t + 1]
       out[w++] = indices[t + 2]
     }
   }
+  if (w === indices.length) return indices
   return out.slice(0, w)
 }
