@@ -172,6 +172,8 @@ export function ControlsPanel({
     const next = randomizeParams(randomSeed(), preset)
     // the candle is a functional choice, never randomized away
     next.candle = params.candle
+    // tealight holders stay low regardless of which preset was rolled
+    if (next.candle === "telys") next.height = Math.min(next.height, 1.25)
     for (const k of locked) next[k] = params[k]
     onChange(next)
   }
