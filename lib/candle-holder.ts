@@ -131,11 +131,11 @@ export const PRESETS: Record<string, Recipe> = {
   bloom: {
     candle: "kronelys",
     symmetry: 3, mirror: 0,
-    depth: 3, branches: 2, branchSpread: 0.45, length: 0.8, decay: 0.85,
-    gravity: 0.8, outward: 0.55, curl: 0.2, wiggle: 0.1, loopiness: 0.8,
-    rings: 0.55, crown: 0, levels: 1, shell: 0,
-    height: 1.7, spread: 1.35, tube: 0.1, taper: 0.08, blend: 0.09,
-    bulb: 0.35, open: 1, cup: 0.3, cupPos: 1, dish: 0.55, rimWave: 0.55,
+    depth: 2, branches: 2, branchSpread: 0.55, length: 1.15, decay: 0.9,
+    gravity: 0.95, outward: 0.7, curl: 0.1, wiggle: 0.06, loopiness: 1,
+    rings: 0.12, crown: 0, levels: 1, shell: 0,
+    height: 1.95, spread: 1.1, tube: 0.092, taper: 0.08, blend: 0.08,
+    bulb: 0.25, open: 1, cup: 0.3, cupPos: 1, dish: 0.3, rimWave: 0.9,
   },
   whisk: {
     candle: "kronelys",
@@ -243,7 +243,7 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
   return { preset, seed, ...base }
 }
 
-export const DEFAULT_SEED = 7
+export const DEFAULT_SEED = 11
 export const DEFAULT_PARAMS: HolderParams = genParams(DEFAULT_SEED, "bloom")
 
 /* ------------------------------------------------------------------ */
