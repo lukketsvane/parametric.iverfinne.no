@@ -1,7 +1,14 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { DEFAULT_PARAMS, PARAM_RANGES, type HolderParams } from "@/lib/candle-holder"
+import {
+  CANDLE_SPECS,
+  DEFAULT_PARAMS,
+  FAMILIES,
+  PARAM_RANGES,
+  type HolderParams,
+  type ParamKey,
+} from "@/lib/candle-holder"
 import { HolderViewer } from "./holder-viewer"
 import { ControlsPanel } from "./controls-panel"
 import type { NudgeKey } from "./gesture-params"
@@ -42,7 +49,9 @@ export function Studio() {
   const dark = useSystemDark()
   const isDesktop = useIsDesktop()
 
-  // avoid SSR of the WebGL canvas; restore a shared design from the URL
+  // avoid SSR of the WebGL canvas; restore a shared design from the URL.
+  // The hash is untrusted input — every field is validated and clamped so
+  // no crafted URL can push NaN or hostile values into the SDF field.
   useEffect(() => {
     setMounted(true)
     try {
@@ -50,7 +59,29 @@ export function Studio() {
       if (h.startsWith("p=")) {
         const obj = JSON.parse(decodeURIComponent(h.slice(2)))
         if (obj && typeof obj === "object") {
-          setParams((prev) => ({ ...prev, ...obj }))
+          setParams((prev) => {
+            const next = { ...prev }
+            for (const k of Object.keys(PARAM_RANGES) as ParamKey[]) {
+              const v = (obj as Record<string, unknown>)[k]
+              if (typeof v === "number" && Number.isFinite(v)) {
+                const r = PARAM_RANGES[k]
+                next[k] = Math.min(r.max, Math.max(r.min, v))
+              }
+            }
+            if (typeof obj.seed === "number" && Number.isFinite(obj.seed)) {
+              next.seed = Math.floor(obj.seed)
+            }
+            if (typeof obj.preset === "string" && FAMILIES.includes(obj.preset)) {
+              next.preset = obj.preset
+            }
+            if (
+              typeof obj.candle === "string" &&
+              Object.prototype.hasOwnProperty.call(CANDLE_SPECS, obj.candle)
+            ) {
+              next.candle = obj.candle as HolderParams["candle"]
+            }
+            return next
+          })
         }
       }
     } catch {

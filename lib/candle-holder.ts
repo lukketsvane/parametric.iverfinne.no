@@ -773,14 +773,17 @@ function buildSkeleton(p: HolderParams): Skeleton {
 
   /* ---- the candle interface: cup, socket, optional drip dish ----
      socket dimensions are real: the chosen candle must drop in and hold */
-  const spec = CANDLE_SPECS[p.candle] ?? CANDLE_SPECS.kronelys
+  const spec = Object.prototype.hasOwnProperty.call(CANDLE_SPECS, p.candle)
+    ? CANDLE_SPECS[p.candle]
+    : CANDLE_SPECS.kronelys
   const minWall = 4 / MM_PER_UNIT
   const cupR = Math.max(p.cup, spec.socketR + minWall)
   const cupH = spec.cupHalfH
-  // clamped so the cup never sinks below the ground plane on short bodies
+  // clamped so the cup BOTTOM never sinks below the ground plane on
+  // short bodies — the piece must stand on its feet, not its cup
   const cupY = Math.max(
     Math.min(yBot + p.cupPos * H, yTop - cupH * 0.5),
-    yBot + cupH * 0.6,
+    yBot + cupH,
   )
   sk.central.push({ t: 2, x: 0, y: cupY, z: 0, r: cupR, h: cupH, rd: r0 * 0.45 })
   // bore from the cup mouth down, leaving a floor under the candle
@@ -1004,8 +1007,12 @@ function buildSkeleton(p: HolderParams): Skeleton {
   const chordBow = (c: number) => c * (0.22 + 0.38 * p.outward)
 
   // the lattice hangs from a hub on a short stem under the cup (a crown
-  // replaces the hub as the attachment when present)
-  const hubY = p.crown > 0.03 ? seedY : seedY - Math.max(0.14, (seedY - yBot) * 0.16)
+  // replaces the hub as the attachment when present); the stem cap must
+  // stay above the ground plane so the piece stands on its feet
+  const hubY = Math.max(
+    p.crown > 0.03 ? seedY : seedY - Math.max(0.14, (seedY - yBot) * 0.16),
+    yBot + r0 * 1.2,
+  )
   if (p.crown <= 0.03) {
     // conical stem: swallows the candle collar and tapers to tube gauge,
     // so nothing under the dish reads as a bare block
@@ -1511,7 +1518,9 @@ export function buildHolderArrays(
   const positions = marched.positions
   // a candle holder is ONE printable body: keep only the connected
   // component that carries the cup, dropping crumbs and loose ornaments
-  const specA = CANDLE_SPECS[p.candle] ?? CANDLE_SPECS.kronelys
+  const specA = Object.prototype.hasOwnProperty.call(CANDLE_SPECS, p.candle)
+    ? CANDLE_SPECS[p.candle]
+    : CANDLE_SPECS.kronelys
   const cupYA = Math.min(
     -p.height / 2 + p.cupPos * p.height,
     p.height / 2 - specA.cupHalfH * 0.5,
