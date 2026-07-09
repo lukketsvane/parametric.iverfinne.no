@@ -150,6 +150,9 @@ export function ControlsPanel({
   const open = mode !== "collapsed"
   // tapped-locked parameters survive randomize untouched
   const [locked, setLocked] = useState<ReadonlySet<ParamKey>>(new Set())
+  // shuffle roams across ALL presets unless the type is locked by
+  // tapping the seed number next to the dropdown
+  const [presetLocked, setPresetLocked] = useState(false)
 
   const set = (patch: Partial<HolderParams>) => onChange({ ...params, ...patch })
 
@@ -162,7 +165,10 @@ export function ControlsPanel({
     })
 
   const shuffle = () => {
-    const next = randomizeParams(randomSeed(), params.preset)
+    const preset = presetLocked
+      ? params.preset
+      : FAMILIES[Math.floor(Math.random() * FAMILIES.length)]
+    const next = randomizeParams(randomSeed(), preset)
     // the candle is a functional choice, never randomized away
     next.candle = params.candle
     for (const k of locked) next[k] = params[k]
@@ -192,9 +198,20 @@ export function ControlsPanel({
               strokeWidth={2.2}
             />
           </div>
-          <span className="px-1 text-[11px] tabular-nums tracking-widest text-black/60 dark:text-white/60">
+          <button
+            onClick={() => setPresetLocked((l) => !l)}
+            aria-pressed={presetLocked}
+            title={
+              presetLocked
+                ? "Type locked — shuffle stays in this preset"
+                : "Tap to lock the type against shuffle"
+            }
+            className={`px-1 text-[11px] tabular-nums tracking-widest text-black/60 transition-opacity dark:text-white/60 ${
+              presetLocked ? "opacity-30" : ""
+            }`}
+          >
             {params.seed}
-          </span>
+          </button>
 
           <div className="flex-1" />
 

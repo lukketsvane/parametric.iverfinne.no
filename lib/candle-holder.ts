@@ -131,11 +131,11 @@ export const PRESETS: Record<string, Recipe> = {
   bloom: {
     candle: "kronelys",
     symmetry: 3, mirror: 0,
-    depth: 2, branches: 2, branchSpread: 0.55, length: 1.15, decay: 0.9,
-    gravity: 0.95, outward: 0.7, curl: 0.1, wiggle: 0.06, loopiness: 1,
+    depth: 3, branches: 2, branchSpread: 0.55, length: 1.15, decay: 0.9,
+    gravity: 0.95, outward: 0.7, curl: 0.08, wiggle: 0, loopiness: 1,
     rings: 0.12, crown: 0, levels: 1, shell: 0,
     height: 1.95, spread: 1.1, tube: 0.092, taper: 0.08, blend: 0.08,
-    bulb: 0.25, open: 1, cup: 0.3, cupPos: 1, dish: 0.3, rimWave: 0.9,
+    bulb: 0.25, open: 1, cup: 0.3, cupPos: 1, dish: 0.38, rimWave: 0.85,
   },
   whisk: {
     candle: "kronelys",
@@ -239,6 +239,25 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
     const r = PARAM_RANGES[k]
     const uniform = r.min + rnd() * (r.max - r.min)
     base[k] = snap(k, base[k] + (uniform - base[k]) * WILD)
+  }
+  // coherence: calm curves, crisp joints, one dominant structural motif —
+  // a shuffle may surprise, but it must never stack every device at once
+  base.wiggle = Math.min(base.wiggle, 0.35)
+  base.blend = Math.min(base.blend, base.tube * 1.2)
+  if (base.shell > 0.25) {
+    base.loopiness = Math.min(base.loopiness, 0.5)
+    base.rings = Math.min(base.rings, 0.4)
+    base.crown = Math.min(base.crown, 0.3)
+    base.dish = Math.min(base.dish, 0.3)
+    base.levels = Math.min(base.levels, 2)
+  }
+  if (base.levels > 1) {
+    base.crown = Math.min(base.crown, 0.4)
+    base.dish = Math.min(base.dish, 0.3)
+  }
+  if (base.cupPos < 0.75) base.dish = Math.min(base.dish, 0.2)
+  for (const k of ["wiggle", "blend", "loopiness", "rings", "crown", "dish", "levels"] as ParamKey[]) {
+    base[k] = snap(k, base[k])
   }
   return { preset, seed, ...base }
 }
@@ -625,45 +644,28 @@ function buildSkeleton(p: HolderParams): Skeleton {
     rd: 0.03,
   })
   if (p.dish > 0.02) {
+    // the dish is one leaf per symmetry wedge, peaks aligned to the wedge
+    // centers so the whole piece shares a single Cn symmetry group; fewer
+    // leaves get proportionally deeper scallops so they read as petals
+    const waves = n
     sk.central.push({
       t: 3,
       y: cupY + cupH * 0.3,
       r: cupR * 1.25 + p.dish * (R * 0.8 - cupR),
-      amp: 0.04 + p.rimWave * 0.09,
-      waves: 6 + (p.seed % 3),
-      phase: rnd() * Math.PI * 2,
+      amp: (0.04 + p.rimWave * 0.1) * Math.sqrt(6 / waves),
+      waves,
+      phase: Math.PI / 2 - waves * m,
       th: 0.07,
       curve: 0.2 + p.rimWave * 0.12,
     })
-  }
-
-  /* ---- seeded branching growth inside the wedge ---- */
-  // each lineage accumulates ONE continuous variable-radius path from its
-  // branch point to its tip, so limbs stay clean with no joint bulges
-  type TipState = {
-    pos: V3
-    dir: V3
-    depth: number
-    r: number
-    path: V3[]
-    radii: number[]
   }
 
   // the candle interface stays unique when the body is stacked in levels
   const cupPrims = sk.central.length
   const cupNegPrims = sk.centralNeg.length
 
-  // every strut endpoint becomes a loop-closure anchor; the two axis
-  // anchors let rising limbs converge into apex knots (teepees, domes)
-  const anchors: V3[] = [
-    [0, cupY - cupH, 0],
-    [0, yTop - r0 * 1.5, 0],
-  ]
-  const unit = (H + R) / 2
-
   // a tip can close a ring to its own symmetry copies: with n-fold
-  // replication one arc per wedge becomes a full circle. The arc is
-  // centered on the tip so it stays within the safe folding window.
+  // replication one arc per wedge becomes a full circle
   const ringTo = (end: V3, rr: number) => {
     const er = Math.hypot(end[0], end[2])
     if (er < 0.15) return
@@ -675,16 +677,12 @@ function buildSkeleton(p: HolderParams): Skeleton {
     sk.wedge.push(tube(pts, rr))
   }
 
-  // bowed connector: a teardrop/almond loop between two skeleton points.
-  // When closing back to the limb's own root the connector bows away from
-  // the limb's midpoint, guaranteeing an open eye instead of hugging it.
+  // bowed connector between two skeleton points (used for apex knots)
   const closeLoop = (a: V3, b: V3, rr: number, awayFrom?: V3) => {
     const dch = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
     const mid: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
     let ctrl: V3
     if (awayFrom) {
-      // bow sideways, perpendicular to the chord, on the side facing away
-      // from the limb — the eye must clear it by more than a tube diameter
       let px = -(b[2] - a[2])
       let pz = b[0] - a[0]
       const pl = Math.hypot(px, pz) || 1
@@ -715,9 +713,7 @@ function buildSkeleton(p: HolderParams): Skeleton {
     const crownR = cupR + r0 * 2 + p.crown * (R * 0.8 - cupR - r0 * 2)
     const yC = cupY + cupH * 0.2
     ringTo(pol(crownR, m - s / 2, yC), r0)
-    // spoke tying the crown to the cup wall
     sk.wedge.push(tube([pol(cupR * 0.85, m, yC), pol(crownR, m, yC)], r0 * 0.95))
-    // bored mouth through the crown at each corner
     if (p.open > 0.05) {
       const b = m + s / 2
       const corner = pol(crownR, b, yC)
@@ -733,185 +729,122 @@ function buildSkeleton(p: HolderParams): Skeleton {
     seedY = yC - r0 * 0.4
   }
 
-  // `branches` limbs sprout from the cup wall (or the crown) in each wedge
-  const B0 = Math.round(p.branches)
-  let tips: TipState[] = []
-  for (let k = 0; k < B0; k++) {
-    const a0 = m + ((k - (B0 - 1) / 2) * p.branchSpread * s) / Math.max(1, B0 - 1 || 1)
-    const seedPos = pol(seedR, a0, seedY)
-    tips.push({
-      pos: seedPos,
-      dir: norm([
-        Math.cos(a0) * (0.4 + p.outward * 0.6),
-        -(0.15 + Math.max(p.gravity, 0) * 0.85) + Math.max(-p.gravity, 0) * 0.7,
-        Math.sin(a0) * (0.4 + p.outward * 0.6),
-      ]),
-      depth: 0,
-      r: r0,
-      path: [seedPos],
-      radii: [r0],
-    })
-  }
+  /* ---- structured growth: tiers of clean arcs inside the wedge ----
+     Randomness decides LAYOUT (where limbs go, which fate each tip gets);
+     the curves themselves are always clean single-bow arcs, so every
+     output reads as bent porcelain tube, never as a melted random walk. */
 
-  let strutBudget = 48 // hard cap per wedge
-
-  while (tips.length && strutBudget > 0) {
-    const next: TipState[] = []
-    for (const tip of tips) {
-      if (strutBudget-- <= 0) break
-      const L = p.length * Math.pow(p.decay, tip.depth) * unit * 0.55
-
-      // steer: gravity droops (or lifts), outwardness pulls radially,
-      // curl swirls tangentially, wiggle adds seeded noise
-      const radial = norm([tip.pos[0], 0, tip.pos[2]])
-      const tangent: V3 = [-radial[2], 0, radial[0]]
-      let dir = norm([
-        tip.dir[0] +
-          radial[0] * p.outward * 0.45 +
-          tangent[0] * p.curl * 0.5 +
-          jr(p.wiggle * 0.5),
-        tip.dir[1] - p.gravity * 0.55 + jr(p.wiggle * 0.3),
-        tip.dir[2] +
-          radial[2] * p.outward * 0.45 +
-          tangent[2] * p.curl * 0.5 +
-          jr(p.wiggle * 0.5),
-      ])
-
-      let end: V3 = [
-        tip.pos[0] + dir[0] * L,
-        tip.pos[1] + dir[1] * L,
-        tip.pos[2] + dir[2] * L,
-      ]
-
-      // keep growth inside the vertical budget; landing = a foot
-      let grounded = false
-      if (end[1] < yBot + tip.r) {
-        const t = (yBot + tip.r - tip.pos[1]) / (end[1] - tip.pos[1])
-        end = [
-          tip.pos[0] + dir[0] * L * t,
-          yBot + tip.r,
-          tip.pos[2] + dir[2] * L * t,
+  // a clean arc from a to b: one outward/tangential/vertical bow plus an
+  // optional subtle ripple — never a random kink
+  const arc = (
+    a: V3,
+    b: V3,
+    bowOut: number,
+    bowTan: number,
+    bowUp: number,
+    rr: number,
+  ): V3[] => {
+    const mid: V3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
+    const mr = Math.hypot(mid[0], mid[2]) || 1
+    const ox = mid[0] / mr
+    const oz = mid[2] / mr
+    const ctrl: V3 = [
+      mid[0] + ox * bowOut - oz * bowTan,
+      mid[1] + bowUp,
+      mid[2] + oz * bowOut + ox * bowTan,
+    ]
+    const pts: V3[] = [a, ...bez(a, ctrl, b, 14)]
+    if (p.wiggle > 0.02) {
+      // deterministic ripple along the arc, radial, fading at the ends
+      const amp = p.wiggle * rr * 1.6
+      for (let i = 1; i < pts.length - 1; i++) {
+        const t = i / (pts.length - 1)
+        const q = Math.hypot(pts[i][0], pts[i][2]) || 1
+        const rip = Math.sin(t * Math.PI * 3) * Math.sin(t * Math.PI) * amp
+        pts[i] = [
+          pts[i][0] + (pts[i][0] / q) * rip,
+          pts[i][1],
+          pts[i][2] + (pts[i][2] / q) * rip,
         ]
-        grounded = true
-      }
-      if (end[1] > yTop - tip.r) end[1] = yTop - tip.r
-      // keep growth inside the radial budget
-      const er = Math.hypot(end[0], end[2])
-      if (er > R) {
-        end[0] *= R / er
-        end[2] *= R / er
-      }
-
-      // bezier control continues the incoming direction and bows outward
-      // and with gravity → sweeping arcs instead of straight sticks
-      const mr2 = Math.hypot(tip.pos[0] + dir[0] * L * 0.5, tip.pos[2] + dir[2] * L * 0.5) || 1
-      const ctrl: V3 = [
-        tip.pos[0] + tip.dir[0] * L * 0.45 + ((tip.pos[0] + dir[0] * L * 0.5) / mr2) * L * 0.2 * p.outward,
-        tip.pos[1] + tip.dir[1] * L * 0.45 - p.gravity * L * 0.15,
-        tip.pos[2] + tip.dir[2] * L * 0.45 + ((tip.pos[2] + dir[2] * L * 0.5) / mr2) * L * 0.2 * p.outward,
-      ]
-      const rEnd = Math.max(0.05, tip.r * (1 - p.taper * 0.45))
-      const samples = bez(tip.pos, ctrl, end, 10)
-      tip.path.push(...samples)
-      for (let i = 1; i <= samples.length; i++) {
-        tip.radii.push(tip.r + ((rEnd - tip.r) * i) / samples.length)
-      }
-      const strutStart = tip.path[0]
-      anchors.push(end)
-
-      const emit = () => sk.wedge.push(tube(tip.path, tip.radii))
-
-      if (grounded) {
-        emit()
-        // feet: a bulb, optionally an open mouth, and maybe a loop or ring
-        if (rnd() < 0.4 + p.bulb * 0.4) {
-          sk.wedge.push(sphere(end, rEnd * (1.15 + p.bulb * 0.55)))
-        }
-        if (p.open > 0.05 && rnd() < p.open) {
-          openTip(sk, end, [dir[0] * 0.5, -1, dir[2] * 0.5], rEnd, p.open)
-        }
-        if (rnd() < p.loopiness * 0.7) {
-          closeLoop(end, strutStart, rEnd * 0.95, tip.path[tip.path.length >> 1])
-        }
-        if (rnd() < p.rings * 0.7) {
-          ringTo(end, rEnd * 0.9)
-        }
-        continue
-      }
-
-      const canBranch = tip.depth + 1 < Math.round(p.depth)
-      if (canBranch) {
-        const B = Math.round(p.branches)
-        if (B === 1) {
-          // no split: the limb keeps growing as one continuous path
-          next.push({
-            pos: end,
-            dir,
-            depth: tip.depth + 1,
-            r: rEnd,
-            path: tip.path,
-            radii: tip.radii,
-          })
-          continue
-        }
-        emit()
-        for (let k = 0; k < B; k++) {
-          const off = (k - (B - 1) / 2) * p.branchSpread * s * 1.2
-          next.push({
-            pos: end,
-            dir: norm(rotY(dir, off + jr(p.wiggle * 0.3))),
-            depth: tip.depth + 1,
-            r: rEnd,
-            path: [end],
-            radii: [rEnd],
-          })
-        }
-        // a node bulb marks the split; sometimes a ring passes through it
-        if (rnd() < p.bulb * 0.5) {
-          sk.wedge.push(sphere(end, rEnd * (1.1 + p.bulb * 0.5)))
-        }
-        if (rnd() < p.rings * 0.6) {
-          ringTo(end, rEnd * 0.85)
-        }
-        continue
-      }
-
-      emit()
-      // terminal tip: close a loop, ring the axis, open a mouth, grow a pearl
-      const roll = rnd()
-      if (roll < p.loopiness) {
-        // teardrop back to this limb's own root, or to the nearest anchor —
-        // neighbor-wedge copies included so loops cross sector boundaries
-        let best: V3 = strutStart
-        let bestD = Math.hypot(
-          strutStart[0] - end[0],
-          strutStart[1] - end[1],
-          strutStart[2] - end[2],
-        )
-        for (const a of anchors) {
-          for (const cand of [a, rotY(a, s), rotY(a, -s)] as V3[]) {
-            const d = Math.hypot(cand[0] - end[0], cand[1] - end[1], cand[2] - end[2])
-            if (d > L * 0.35 && d < bestD) {
-              bestD = d
-              best = cand
-            }
-          }
-        }
-        closeLoop(
-          end,
-          best,
-          rEnd * 0.95,
-          best === strutStart ? tip.path[tip.path.length >> 1] : undefined,
-        )
-      } else if (rnd() < p.rings) {
-        ringTo(end, rEnd * 0.9)
-      } else if (p.open > 0.05 && rnd() < p.open) {
-        openTip(sk, end, dir, rEnd, p.open)
-      } else {
-        sk.wedge.push(sphere(end, rEnd * (1.05 + p.bulb * 0.6)))
       }
     }
-    tips = next
+    return pts
+  }
+
+  const lift = p.gravity < -0.3 // negative gravity: limbs rise instead
+  const tiers = Math.round(p.depth)
+  const arms = Math.round(p.branches)
+  const rTip = Math.max(0.05, r0 * (1 - p.taper * 0.6))
+  const chordBow = (c: number) => c * (0.22 + 0.38 * p.outward)
+
+  // feet land on a ground ring (or a sky ring when lifting)
+  const fR = R * (0.62 + 0.3 * p.outward) * Math.min(1.3, p.length)
+  const yFoot = lift ? yTop - r0 * 1.5 : yBot + r0
+  const anchors: V3[] = [[0, yTop - r0 * 1.5, 0]]
+
+  /* tier 0 — legs: teardrop loop pairs or single arcs, seed → foot */
+  for (let k = 0; k < arms; k++) {
+    const off = arms > 1 ? (k - (arms - 1) / 2) * p.branchSpread * s * 0.8 : 0
+    const a0 = m + off
+    const seed = pol(seedR, a0, seedY)
+    const fa = a0 + p.curl * s * 0.6
+    const foot = pol(fR, fa, yFoot)
+    const chord = Math.hypot(foot[0] - seed[0], foot[1] - seed[1], foot[2] - seed[2])
+    const sag = -p.gravity * chord * 0.22
+    anchors.push(foot)
+    if (rnd() < p.loopiness) {
+      // a proper teardrop: two mirrored arcs meeting at both ends
+      const w = chord * (0.16 + 0.3 * p.branchSpread)
+      sk.wedge.push(tube(arc(seed, foot, chordBow(chord) * 0.5, w, sag, r0), r0))
+      sk.wedge.push(tube(arc(seed, foot, chordBow(chord) * 0.5, -w, sag, r0), r0))
+    } else {
+      sk.wedge.push(tube(arc(seed, foot, chordBow(chord), 0, sag, r0), r0))
+    }
+    // the foot: an open mouth into the ground, a pearl, or bare
+    if (p.open > 0.05 && rnd() < p.open) {
+      openTip(sk, foot, lift ? [foot[0], 0.6, foot[2]] : [foot[0] * 0.3, -1, foot[2] * 0.3], r0, p.open)
+    } else if (rnd() < p.bulb * 0.6) {
+      sk.wedge.push(sphere(foot, r0 * (1.2 + p.bulb * 0.5)))
+    }
+    if (rnd() < p.rings * 0.7) ringTo(foot, r0 * 0.9)
+    if (lift && rnd() < p.loopiness * 0.8) {
+      // rising limbs can close onto the axis — apex knots
+      closeLoop(foot, [0, yTop - r0, 0], rTip, undefined)
+    }
+  }
+
+  /* tier 1 — arches: foot-to-foot arcs between neighboring wedges */
+  if (tiers >= 2 && !lift) {
+    const fa = m + p.curl * s * 0.6
+    const foot = pol(fR, fa, yFoot)
+    const next = pol(fR, fa + s, yFoot)
+    const span = Math.hypot(next[0] - foot[0], next[2] - foot[2])
+    const hUp = span * (0.35 + 0.3 * p.decay)
+    sk.wedge.push(tube(arc(foot, next, span * 0.12, 0, hUp, rTip), rTip))
+  }
+
+  /* tier 2 — side arms: straight flared tubes reaching out at mid height */
+  if (tiers >= 3) {
+    const yMid = (seedY + yFoot) / 2
+    const b = m + s / 2
+    const inner = pol(Math.max(seedR * 0.8, fR * 0.35), b, yMid)
+    const tip = pol(R * 0.95 * Math.pow(p.decay, 1), b, yMid + R * 0.06)
+    sk.wedge.push(tube(arc(inner, tip, 0, 0, -R * 0.05, rTip), rTip))
+    if (p.open > 0.05 && rnd() < Math.max(0.5, p.open)) {
+      openTip(sk, tip, [tip[0], 0.15, tip[2]], rTip, p.open)
+    } else {
+      sk.wedge.push(sphere(tip, rTip * (1.1 + p.bulb * 0.5)))
+    }
+    if (rnd() < p.rings * 0.5) ringTo(tip, rTip * 0.85)
+  }
+
+  /* tier 3 — crest: short nubs rising past the cup rim */
+  if (tiers >= 4) {
+    const base = pol(seedR * 0.95, m + s / 2, seedY + cupH)
+    const tip2: V3 = [base[0] * 1.25, seedY + cupH + r0 * 2.8, base[2] * 1.25]
+    sk.wedge.push(tube([base, tip2], rTip * 0.9))
+    if (rnd() < p.bulb * 0.7) sk.wedge.push(sphere(tip2, rTip * (1.15 + p.bulb * 0.45)))
+    else if (p.open > 0.05 && rnd() < p.open) openTip(sk, tip2, [tip2[0] * 0.4, 1, tip2[2] * 0.4], rTip * 0.9, p.open)
   }
 
   /* ---- optional shell: a hollow skin grown around the body ----
