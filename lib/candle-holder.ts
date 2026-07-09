@@ -292,6 +292,21 @@ export function randomizeParams(seed: number, preset: string): HolderParams {
   // a high symmetry order already fills the circle — pair it with extra
   // branches and the wall becomes a picket fence
   if (base.symmetry >= 9) base.branches = 1
+  // airiness: what reads as "dense" is the rib count around the circle —
+  // legs x branches, doubled again by almond loops. Thin the doubling
+  // factors first, then the tube gauge, before ever touching symmetry.
+  const ribs = () =>
+    base.symmetry * base.branches * (1 + base.loopiness * 0.8)
+  if (ribs() > 22) {
+    base.loopiness = Math.max(
+      0,
+      (22 / (base.symmetry * base.branches) - 1) / 0.8,
+    )
+  }
+  if (ribs() > 22) base.branches = 1
+  if (base.symmetry >= 8 && base.depth >= 2) {
+    base.tube = Math.min(base.tube, 0.095)
+  }
   // corkscrewing arms read as tangles, not structure
   base.curl = Math.max(-0.4, Math.min(base.curl, 0.4))
   // keep the silhouette inside a graceful footprint: wide + flaring = sprawl
