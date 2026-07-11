@@ -2,7 +2,6 @@
 
 import { useRef, useState, type ReactNode } from "react"
 import {
-  Bookmark,
   Download,
   Shuffle,
   SlidersHorizontal,
@@ -35,7 +34,6 @@ import {
   FAMILIES,
   PARAM_RANGES as HOLDER_RANGES,
   SECTIONS as HOLDER_SECTIONS,
-  genParams as genHolderParams,
   randomizeParams as randomizeHolder,
   type CandleType,
   type HolderParams,
@@ -62,7 +60,7 @@ import {
   type ParamKey as TotemKey,
 } from "@/lib/totem/engine"
 import { downloadSTL as downloadTotemSTL } from "@/lib/totem/export-stl"
-import { ENGINES, type Engine, type KeptPiece } from "@/lib/engines"
+import { ENGINES, type Engine } from "@/lib/engines"
 
 // monochrome controls — solid black/white ink, thin subtle hairline outlines
 const HAIR = "border-black/15 dark:border-white/20"
@@ -422,7 +420,6 @@ export function ControlsPanel({
   totemParams,
   isDesktop,
   hiDetail,
-  shelf,
   onEngineChange,
   onToggleDetail,
   onChange,
@@ -430,9 +427,6 @@ export function ControlsPanel({
   onHolderChange,
   onVesselChange,
   onTotemChange,
-  onKeep,
-  onLoadKept,
-  onRemoveKept,
 }: {
   engine: Engine
   params: Params
@@ -442,7 +436,6 @@ export function ControlsPanel({
   totemParams: TotemParams
   isDesktop: boolean
   hiDetail: boolean
-  shelf: KeptPiece[]
   onEngineChange: (e: Engine) => void
   onToggleDetail: () => void
   onChange: (p: Params) => void
@@ -450,9 +443,6 @@ export function ControlsPanel({
   onHolderChange: (p: HolderParams) => void
   onVesselChange: (p: VesselParams) => void
   onTotemChange: (p: TotemParams) => void
-  onKeep: () => void
-  onLoadKept: (k: KeptPiece) => void
-  onRemoveKept: (id: number) => void
 }) {
   // collapsed → half (designs, glazes, families) → full (every parameter)
   const [mode, setMode] = useState<"collapsed" | "half" | "full">("collapsed")
@@ -462,9 +452,6 @@ export function ControlsPanel({
   const [lockedHolder, setLockedHolder] = useState<ReadonlySet<HolderKey>>(new Set())
   const [lockedVessel, setLockedVessel] = useState<ReadonlySet<VesselKey>>(new Set())
   const [lockedTotem, setLockedTotem] = useState<ReadonlySet<TotemKey>>(new Set())
-  // shuffle roams across a motor's families unless its family is locked
-  const [holderFamilyLocked, setHolderFamilyLocked] = useState(false)
-  const [vesselFamilyLocked, setVesselFamilyLocked] = useState(false)
   // the totem seed field is free text: numbers are seeds, anything else
   // is a signature — «Iver» is always Iver's totem
   const [totemDraft, setTotemDraft] = useState<string | null>(null)
@@ -525,23 +512,21 @@ export function ControlsPanel({
       return
     }
     if (engine === "holder") {
-      const preset = holderFamilyLocked
-        ? holderParams.preset
-        : FAMILIES[Math.floor(Math.random() * FAMILIES.length)]
-      const next = randomizeHolder(randomSeed(), preset)
+      // one motor: shuffle roams the whole space — the internal recipes
+      // are sampler anchors, never a user-facing choice
+      const anchor = FAMILIES[Math.floor(Math.random() * FAMILIES.length)]
+      const next = randomizeHolder(randomSeed(), anchor)
       // the candle is a functional choice, never randomized away
       next.candle = holderParams.candle
-      // tealight holders stay low regardless of which preset was rolled
+      // tealight holders stay low regardless of what was rolled
       if (next.candle === "telys") next.height = Math.min(next.height, 1.25)
       for (const k of lockedHolder) next[k] = holderParams[k]
       onHolderChange(next)
       return
     }
     if (engine === "vessel") {
-      const preset = vesselFamilyLocked
-        ? vesselParams.preset
-        : VESSEL_FAMILIES[Math.floor(Math.random() * VESSEL_FAMILIES.length)]
-      const next = randomizeVessel(randomSeed(), preset)
+      const anchor = VESSEL_FAMILIES[Math.floor(Math.random() * VESSEL_FAMILIES.length)]
+      const next = randomizeVessel(randomSeed(), anchor)
       for (const k of lockedVessel) next[k] = vesselParams[k]
       onVesselChange(next)
       return
@@ -572,19 +557,18 @@ export function ControlsPanel({
       Math.round(params.glazeT) === c.glazeT,
   )?.name
 
-  // what the piece calls itself in the header, per engine
+  // what the piece calls itself in the header, per engine — the holder
+  // and vessel motors have no names: their pieces are seed + parameters
   const totemTitle = totemParams.sig?.trim() || genName(totemParams.seed)
   const totemMm = Math.round(totemParams.height * TOTEM_MM)
   const headerName =
     engine === "print"
       ? printName(printParams)
-      : engine === "holder"
-        ? holderParams.preset
-        : engine === "vessel"
-          ? vesselParams.preset
-          : engine === "totem"
-            ? `«${totemTitle}» ${totemMm} mm`
-            : designName(params)
+      : engine === "holder" || engine === "vessel"
+        ? ""
+        : engine === "totem"
+          ? `«${totemTitle}» ${totemMm} mm`
+          : designName(params)
   const headerSeed =
     engine === "print"
       ? printParams.seed
@@ -633,17 +617,6 @@ export function ControlsPanel({
           </span>
 
           <button
-            onClick={() => {
-              onKeep()
-              if (mode === "collapsed") setMode("half")
-            }}
-            aria-label="Keep this piece on your shelf"
-            title="Keep this piece on your shelf"
-            className={ICON_BTN}
-          >
-            <Bookmark className="h-4 w-4" strokeWidth={2.2} />
-          </button>
-          <button
             onClick={shuffle}
             aria-label="Randomize design"
             className={ICON_BTN_SOLID}
@@ -677,42 +650,6 @@ export function ControlsPanel({
         {/* expandable body */}
         {open && (
           <div className="max-h-[56vh] overflow-y-auto px-4 pb-4">
-            {/* the shelf — pieces this visitor kept, across visits and
-                engines; a kept piece brings its engine back with it */}
-            {shelf.length > 0 && (
-              <div className="mb-3">
-                <p className="pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-black/50 dark:text-white/50">
-                  shelf
-                </p>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {shelf.map((k) => (
-                    <div key={k.id} className="relative shrink-0">
-                      <button
-                        onClick={() => onLoadKept(k)}
-                        title={`${k.name} ${k.params.seed}`}
-                        aria-label={`Bring back ${k.name} ${k.params.seed}`}
-                        className={`block h-16 w-14 overflow-hidden rounded-xl border ${HAIR} transition active:scale-95`}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={k.thumb}
-                          alt={k.name}
-                          className="h-full w-full object-cover"
-                        />
-                      </button>
-                      <button
-                        onClick={() => onRemoveKept(k.id)}
-                        aria-label={`Remove ${k.name} from the shelf`}
-                        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black text-[10px] leading-none text-white transition active:scale-90 dark:bg-white dark:text-black"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {engine === "print" && (
               <>
                 {/* filament inks */}
@@ -776,42 +713,6 @@ export function ControlsPanel({
 
             {engine === "holder" && (
               <>
-                {/* the growth family — a curated starting point, not a
-                    fixed shape; shuffle roams families unless locked */}
-                <div className="flex items-center gap-3 py-1.5">
-                  <span className="w-20 shrink-0 text-[11px] uppercase tracking-widest text-black dark:text-white">
-                    family
-                  </span>
-                  <select
-                    value={holderParams.preset}
-                    onChange={(e) =>
-                      onHolderChange({
-                        ...genHolderParams(holderParams.seed, e.target.value),
-                        candle: holderParams.candle,
-                      })
-                    }
-                    aria-label="Preset family"
-                    className={`h-8 min-w-0 flex-1 appearance-none rounded-full border ${HAIR} bg-transparent px-3 text-[11px] uppercase tracking-widest text-black outline-none dark:text-white [&>option]:bg-white dark:[&>option]:bg-black`}
-                  >
-                    {FAMILIES.map((fam) => (
-                      <option key={fam} value={fam}>
-                        {fam}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => setHolderFamilyLocked((l) => !l)}
-                    className={chipClass(holderFamilyLocked)}
-                    title={
-                      holderFamilyLocked
-                        ? "Family locked — shuffle stays in this family"
-                        : "Tap to lock the family against shuffle"
-                    }
-                  >
-                    {holderFamilyLocked ? "locked" : "lock"}
-                  </button>
-                </div>
-
                 <div className="mb-1 flex flex-wrap gap-1.5 pt-1">
                   <button
                     onClick={() => setHolder({ mirror: holderParams.mirror >= 0.5 ? 0 : 1 })}
@@ -888,28 +789,6 @@ export function ControlsPanel({
 
             {engine === "vessel" && (
               <>
-                {/* one motor, twelve reference families — shuffle roams
-                    them; lock the family to stay inside it */}
-                <div className="flex items-center gap-3 py-1.5">
-                  <span className="w-20 shrink-0 text-[11px] uppercase tracking-widest text-black dark:text-white">
-                    family
-                  </span>
-                  <span className="flex-1 text-[11px] uppercase tracking-widest text-black/60 dark:text-white/60">
-                    {vesselParams.preset}
-                  </span>
-                  <button
-                    onClick={() => setVesselFamilyLocked((l) => !l)}
-                    className={chipClass(vesselFamilyLocked)}
-                    title={
-                      vesselFamilyLocked
-                        ? "Family locked — shuffle stays in this family"
-                        : "Tap to lock the family against shuffle"
-                    }
-                  >
-                    {vesselFamilyLocked ? "locked" : "lock"}
-                  </button>
-                </div>
-
                 <div className="mb-1 flex flex-wrap gap-1.5 pt-1">
                   <button
                     onClick={() => setVessel({ seed: randomSeed() })}

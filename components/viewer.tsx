@@ -85,50 +85,6 @@ function FitCamera({
   return null
 }
 
-/**
- * Hands the parent a snapshot function: force one render (the loop is
- * demand-driven, so the drawing buffer may be stale) and downscale the
- * center of the frame into a small thumbnail for the shelf.
- */
-function CaptureBridge({
-  onReady,
-}: {
-  onReady: (fn: () => string | null) => void
-}) {
-  const gl = useThree((s) => s.gl)
-  const scene = useThree((s) => s.scene)
-  const camera = useThree((s) => s.camera)
-  useEffect(() => {
-    onReady(() => {
-      try {
-        gl.render(scene, camera)
-        const src = gl.domElement
-        const side = Math.min(src.width, src.height)
-        const c = document.createElement("canvas")
-        c.width = 96
-        c.height = 96
-        const ctx = c.getContext("2d")
-        if (!ctx) return null
-        ctx.drawImage(
-          src,
-          (src.width - side) / 2,
-          (src.height - side) / 2,
-          side,
-          side,
-          0,
-          0,
-          96,
-          96,
-        )
-        return c.toDataURL("image/webp", 0.82)
-      } catch {
-        return null
-      }
-    })
-  }, [gl, scene, camera, onReady])
-  return null
-}
-
 export function Viewer({
   engine,
   params,
@@ -142,7 +98,6 @@ export function Viewer({
   light,
   onNudge,
   onLight,
-  onCaptureReady,
 }: {
   engine: Engine
   params: Params
@@ -156,7 +111,6 @@ export function Viewer({
   light: LightDir
   onNudge: (axis: NudgeAxis, deltaPx: number) => void
   onLight: (dxPx: number, dyPx: number) => void
-  onCaptureReady?: (fn: () => string | null) => void
 }) {
   const bg = dark ? "#000000" : "#ffffff"
   // the SDF engines mesh finer detail and get the bigger shadow budget
@@ -349,7 +303,6 @@ export function Viewer({
       </Suspense>
 
       <FitCamera fit={fit} margin={FIT_MARGIN[engine]} />
-      {onCaptureReady && <CaptureBridge onReady={onCaptureReady} />}
       <GestureParams onNudge={onNudge} onLight={onLight} />
       <OrbitControls
         target={[0, 0.35, 0]}

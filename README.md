@@ -2,10 +2,12 @@
 
 One parametric 3D studio, five generative engines — the merger of what
 used to live at parametric, parametric-01, parametric-02 and
-parametric-03. The dropdown in the panel switches engines; each engine
-keeps its own current design (shuffle never crosses engines), and the
-shared shell — viewer stage, controls panel, gestures, shareable URL
-state, snapshot shelf — comes from parametric-02.
+parametric-03. The dropdown in the panel switches engines — motors
+generating meshes, nothing else: no user-facing presets, no shape
+menus. Each engine keeps its own current design (shuffle never crosses
+engines, and roams the motor's whole space), and the shared shell —
+viewer stage, controls panel, gestures, shareable URL state — comes
+from parametric-02.
 
 **Ceramics** (`lib/model.ts`, `lib/build.ts`) — one generative model: a
 stack of two lathe bodies studded with rings of spikes and bobbles,
@@ -28,10 +30,9 @@ socket fits a real candle (telys Ø39 or kronelys Ø22); STL downloads
 are print-ready, in millimeters.
 
 **Vessels** (`lib/vessel/`, from parametric-01) — finned, tiered, torn
-SDF bodies in tinted clay: one motor whose shuffle roams twelve
-reference families (relikvie, sikksakk, pagode, vaffel, turbin, korall,
-blomst, lykt, timeglas, granat, sokkel, oliven). Crevice-graded vertex
-colors, slab-parallel worker refines, STL export.
+SDF bodies in tinted clay: one motor whose shuffle roams the whole
+space; the reference pieces live on only as internal sampler anchors.
+Crevice-graded vertex colors, slab-parallel worker refines, STL export.
 
 **Totems** (`lib/totem/`, from parametric-03) — stacked, pierced,
 limb-sprouting bodies in ebonised near-black or raw carved wood, with
@@ -45,9 +46,7 @@ Geometry is fully deterministic everywhere: all irregularity comes
 from seeded PRNGs, so a design's parameter values (also encoded in the
 URL hash, with an `engine` field routing to the right motor) reproduce
 it bit-for-bit. Old candle-holder links without an engine field still
-resolve — they betray themselves by their `candle` parameter. Pieces
-you keep go on your shelf — a snapshot thumbnail plus exact parameters
-in localStorage — and a kept piece brings its engine back with it.
+resolve — they betray themselves by their `candle` parameter.
 
 On the stage, one steerable key light (three-finger drag) serves every
 engine; its default heading is exactly where the merged-in studios'
