@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js"
 import { MM_PER_UNIT, buildHolderArrays, type HolderParams } from "./candle-holder"
-import { arraysToGeometry } from "./geometry"
+import { arraysToGeometry } from "../geometry"
 
 // STL exports are meshed once at high resolution regardless of the live
 // viewport quality, so downloads are always print-grade.

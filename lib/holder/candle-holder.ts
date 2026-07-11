@@ -1,4 +1,4 @@
-import { marchGrid, type Grid } from "./marching-cubes"
+import { marchGrid, type Grid } from "../marching-cubes"
 
 /**
  * Parametric candle-stick holders — grown, not modeled.
@@ -1635,4 +1635,98 @@ function filterIslands(
   }
   if (w === indices.length) return indices
   return out.slice(0, w)
+}
+
+/* ------------------------------------------------------------------ */
+/* Studio-facing helpers (merged-app shell)                            */
+/* ------------------------------------------------------------------ */
+
+/** How the controls panel groups the parameters. */
+export const SECTIONS: {
+  title: string
+  keys: { key: ParamKey; label: string }[]
+}[] = [
+  {
+    title: "Symmetry",
+    keys: [{ key: "symmetry", label: "Order" }],
+  },
+  {
+    title: "Growth",
+    keys: [
+      { key: "depth", label: "Depth" },
+      { key: "branches", label: "Branches" },
+      { key: "branchSpread", label: "Spread" },
+      { key: "length", label: "Length" },
+      { key: "decay", label: "Decay" },
+      { key: "gravity", label: "Gravity" },
+      { key: "outward", label: "Outward" },
+      { key: "curl", label: "Curl" },
+      { key: "wiggle", label: "Wiggle" },
+      { key: "loopiness", label: "Loops" },
+      { key: "rings", label: "Rings" },
+      { key: "crown", label: "Crown" },
+      { key: "levels", label: "Levels" },
+    ],
+  },
+  {
+    title: "Body",
+    keys: [
+      { key: "height", label: "Height" },
+      { key: "spread", label: "Radius" },
+      { key: "tube", label: "Tube" },
+      { key: "taper", label: "Taper" },
+      { key: "blend", label: "Blend" },
+      { key: "bulb", label: "Bulbs" },
+      { key: "open", label: "Open" },
+      { key: "spikes", label: "Spikes" },
+      { key: "shell", label: "Shell" },
+    ],
+  },
+  {
+    title: "Cup",
+    keys: [
+      { key: "cup", label: "Cup" },
+      { key: "cupPos", label: "Level" },
+      { key: "dish", label: "Dish" },
+      { key: "rimWave", label: "Rim" },
+    ],
+  },
+]
+
+/** Which parameter each two-finger scroll axis nudges. */
+export const NUDGE_PARAMS: { vertical?: ParamKey; horizontal?: ParamKey } = {
+  vertical: "height",
+  horizontal: "spread",
+}
+
+/**
+ * Rebuild a HolderParams from untrusted input (URL hash, stored shelf),
+ * field by field: every number is clamped into its range, the preset and
+ * candle must name real ones, everything else is ignored. Returns null
+ * when the input isn't an object at all.
+ */
+export function clampHolder(obj: unknown, base: HolderParams): HolderParams | null {
+  if (!obj || typeof obj !== "object") return null
+  const rec = obj as Record<string, unknown>
+  const next = { ...base }
+  for (const k of Object.keys(PARAM_RANGES) as ParamKey[]) {
+    const v = rec[k]
+    if (typeof v === "number" && Number.isFinite(v)) {
+      const r = PARAM_RANGES[k]
+      next[k] = Math.min(r.max, Math.max(r.min, v))
+    }
+  }
+  if (typeof rec.seed === "number" && Number.isFinite(rec.seed)) {
+    next.seed = Math.floor(rec.seed)
+  }
+  if (typeof rec.preset === "string" && FAMILIES.includes(rec.preset)) {
+    next.preset = rec.preset
+  }
+  if (
+    typeof rec.candle === "string" &&
+    Object.prototype.hasOwnProperty.call(CANDLE_SPECS, rec.candle)
+  ) {
+    next.candle = rec.candle as CandleType
+  }
+  return next
 }

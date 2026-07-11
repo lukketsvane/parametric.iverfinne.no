@@ -3,9 +3,9 @@
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
 import { useThree } from "@react-three/fiber"
-import { buildHolderArrays, type HolderParams } from "@/lib/candle-holder"
+import { buildHolderArrays, type HolderParams } from "@/lib/holder/candle-holder"
 import { arraysToGeometry } from "@/lib/geometry"
-import type { HolderJob, HolderResult } from "@/lib/holder-worker"
+import type { HolderJob, HolderResult } from "@/lib/holder/holder-worker"
 
 // resolution is expressed in cells per tube diameter — the detail that
 // matters. Coarse while dragging, refined once the parameters settle.
@@ -19,7 +19,7 @@ const REFINE_CPT_HI = 12
 const REFINE_DELAY = 240
 
 const newWorker = () =>
-  new Worker(new URL("../lib/holder-worker.ts", import.meta.url))
+  new Worker(new URL("../lib/holder/holder-worker.ts", import.meta.url))
 
 export function HolderMesh({
   params,
