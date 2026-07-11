@@ -48,8 +48,10 @@ URL hash, with an `engine` field routing to the right motor) reproduce
 it bit-for-bit. Old candle-holder links without an engine field still
 resolve — they betray themselves by their `candle` parameter.
 
-On the stage, one steerable key light (three-finger drag) serves every
-engine; its default heading is exactly where the merged-in studios'
-fixed key used to hang. Ceramics and prints keep their pure-directional
-rig with a single hard shadow; the SDF engines keep their softbox
-environment, fills and baked contact shadows.
+The stage is one rig for every engine: a steerable key light plus two
+fixed dim fills, pure directionals only — no ambient, no environment
+map, no soft contact blobs — so every piece casts a single hard shadow.
+A three-finger drag steers the key around its dome and never moves the
+camera (the pose from before the fingers landed is restored the moment
+the gesture commits). The floor never moves either: the orbit target is
+fixed, and auto-framing only steps the camera back for bigger pieces.

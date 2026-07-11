@@ -1,12 +1,7 @@
 "use client"
 
 import { Canvas, useThree } from "@react-three/fiber"
-import {
-  ContactShadows,
-  Environment,
-  Lightformer,
-  OrbitControls,
-} from "@react-three/drei"
+import { OrbitControls } from "@react-three/drei"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import * as THREE from "three"
 import type { Engine } from "@/lib/engines"
@@ -24,64 +19,52 @@ import { GestureParams, type NudgeAxis } from "./gesture-params"
 
 export type LightDir = { az: number; el: number }
 
-// how much air the auto-framing leaves around a piece — each engine
-// keeps the margin its home studio used
-const FIT_MARGIN: Record<Engine, number> = {
-  clay: 1.18,
-  print: 1.18,
-  holder: 1.45,
-  vessel: 1.32,
-  totem: 1.45,
-}
+// every engine is framed the same way — one studio, one stage
+const FIT_MARGIN = 1.4
+
+// the stage group sits at this world height; pieces stand on its y=0
+const GROUND_Y = -0.85
+// the floor is pinned to a constant screen height: the orbit target
+// rises exactly in step with camera distance so the angle down to the
+// floor never changes. 0.1637 = (0.35 − GROUND_Y) / |[2.6, 1.85, 6.6]|,
+// the angle of the opening pose.
+const FLOOR_TAN = 0.1637
 
 /**
- * Frame the piece whenever its size changes meaningfully: tall or wide
- * designs used to overflow the fixed camera. The view direction the user
- * chose is preserved — only the distance and target height adapt.
+ * Frame the piece whenever its size changes meaningfully: the camera
+ * keeps its direction — only the distance adapts (bounding-sphere
+ * framing against the tighter field of view), and the target height
+ * rises in lockstep with distance (dist · FLOOR_TAN above the ground),
+ * which pins the floor line to the same screen height for every piece
+ * and every engine at a given orbit angle.
  */
-function FitCamera({
-  fit,
-  margin,
-}: {
-  fit: { r: number; cy: number } | null
-  margin: number
-}) {
+function FitCamera({ fit }: { fit: { r: number; cy: number } | null }) {
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls) as
     | { target: THREE.Vector3; update?: () => void }
     | null
   const invalidate = useThree((s) => s.invalidate)
   const lastR = useRef(0)
-  const lastMargin = useRef(0)
   useEffect(() => {
     if (!fit || !controls) return
-    if (
-      lastR.current &&
-      lastMargin.current === margin &&
-      Math.abs(fit.r - lastR.current) / lastR.current < 0.12
-    ) {
+    if (lastR.current && Math.abs(fit.r - lastR.current) / lastR.current < 0.12) {
       return
     }
     lastR.current = fit.r
-    lastMargin.current = margin
-    // the piece is grounded at y=0 inside a group at y=-0.85
-    const ty = Math.min(1.2, Math.max(-0.05, fit.cy - 0.85 + 0.12))
-    controls.target.set(0, ty, 0)
-    // frame against the tighter field of view — portrait screens clip
-    // horizontally long before the vertical fov does
     const persp = camera as THREE.PerspectiveCamera
     const vHalf = ((persp.fov ?? 32) * Math.PI) / 360
     const hHalf = Math.atan(Math.tan(vHalf) * (persp.aspect || 1))
     const dist = Math.min(
       15,
-      Math.max(3.2, (fit.r * margin) / Math.tan(Math.min(vHalf, hHalf))),
+      Math.max(3.6, (fit.r * FIT_MARGIN) / Math.tan(Math.min(vHalf, hHalf))),
     )
+    controls.target.set(0, GROUND_Y + dist * FLOOR_TAN, 0)
     const dir = camera.position.clone().sub(controls.target)
     if (dir.lengthSq() < 1e-6) dir.set(2.6, 1.85, 6.6)
     camera.position.copy(controls.target).add(dir.setLength(dist))
     controls.update?.()
     invalidate()
-  }, [fit, margin, controls, camera, invalidate])
+  }, [fit, controls, camera, invalidate])
   return null
 }
 
@@ -113,40 +96,16 @@ export function Viewer({
   onLight: (dxPx: number, dyPx: number) => void
 }) {
   const bg = dark ? "#000000" : "#ffffff"
-  // the SDF engines mesh finer detail and get the bigger shadow budget
-  // their home studios ran
-  const shadow =
-    engine === "totem"
-      ? hiDetail
-        ? 4096
-        : 2048
-      : engine === "vessel"
-        ? mobile
-          ? 1024
-          : hiDetail
-            ? 4096
-            : 2048
-        : hiDetail
-          ? 2048
-          : 1024
-  // the steerable key light rides a fixed-radius dome around the piece;
-  // its default heading sits exactly where the merged-in studios' fixed
-  // key light used to hang
+  const shadow = hiDetail ? 4096 : 2048
+  // ONE lighting rig for every engine: a steerable key light riding a
+  // fixed-radius dome (three-finger drag), plus two fixed dim fills so
+  // unlit faces don't collapse to black. No ambient, no environment map,
+  // no baked soft blobs — one light, one hard shadow.
   const lightPos = useMemo<[number, number, number]>(() => {
     const R = 8.6
     const h = R * Math.cos(light.el)
     return [h * Math.cos(light.az), R * Math.sin(light.el), h * Math.sin(light.az)]
   }, [light])
-  const keyIntensity =
-    engine === "clay" || engine === "print" ? 2.1 : engine === "vessel" ? 1.4 : 1.2
-  // holder and totem bake a contact shadow — refresh it once per change
-  const shadowSeq = useRef(0)
-  const bakedParams =
-    engine === "holder" ? holderParams : engine === "totem" ? totemParams : null
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const shadowKey = useMemo(() => ++shadowSeq.current, [bakedParams, dark])
-  // the softbox environment belongs to the merged-in engines' materials
-  const softbox = engine === "holder" || engine === "vessel" || engine === "totem"
   // measured size of the current piece, reported after each rebuild
   const [fit, setFit] = useState<{ r: number; cy: number } | null>(null)
   const onFit = (r: number, cy: number) => setFit({ r, cy })
@@ -162,18 +121,14 @@ export function Viewer({
       <color attach="background" args={[bg]} />
       <fog attach="fog" args={[bg, 14, 34]} />
 
-      {/* one steerable key light for every engine (three-finger drag);
-          each engine keeps the fill rig its home studio used — pure
-          directionals for ceramics and prints, ambient + softbox for the
-          SDF engines */}
       <directionalLight
         key={shadow}
         position={lightPos}
-        intensity={keyIntensity}
+        intensity={2.1}
         castShadow
         shadow-mapSize={[shadow, shadow]}
         shadow-bias={-0.0002}
-        shadow-normalBias={engine === "vessel" ? 0.05 : 0}
+        shadow-normalBias={0.05}
         shadow-camera-left={-6}
         shadow-camera-right={6}
         shadow-camera-top={6}
@@ -181,35 +136,11 @@ export function Viewer({
         shadow-camera-near={0.5}
         shadow-camera-far={24}
       />
-      {(engine === "clay" || engine === "print") && (
-        <>
-          <directionalLight position={[-6, 3, -2]} intensity={0.5} />
-          <directionalLight position={[2, 1.5, 7]} intensity={0.35} />
-        </>
-      )}
-      {engine === "holder" && (
-        <>
-          <ambientLight intensity={0.35} />
-          <directionalLight position={[-6, 3, -2]} intensity={0.35} />
-        </>
-      )}
-      {engine === "vessel" && (
-        <directionalLight position={[-6, 3, -2]} intensity={0.35} />
-      )}
-      {engine === "totem" && (
-        <>
-          <ambientLight intensity={0.35} />
-          {/* the ebonised body is near-black — a firmer rim keeps its
-              edge readable against the dark-mode void */}
-          <directionalLight position={[-6, 3, -2]} intensity={0.5} />
-          {/* soft frontal fill so bores, sunken panels and funnel walls
-              stay legible instead of collapsing into the silhouette */}
-          <directionalLight position={[1.5, 2.5, 8]} intensity={0.4} />
-        </>
-      )}
+      <directionalLight position={[-6, 3, -2]} intensity={0.5} />
+      <directionalLight position={[2, 1.5, 7]} intensity={0.35} />
 
       <Suspense fallback={null}>
-        <group position={[0, -0.85, 0]}>
+        <group position={[0, GROUND_Y, 0]}>
           {engine === "print" ? (
             <PrintSculpture params={printParams} hiDetail={hiDetail} onFit={onFit} />
           ) : engine === "holder" ? (
@@ -236,73 +167,19 @@ export function Viewer({
           ) : (
             <Sculpture params={params} hiDetail={hiDetail} onFit={onFit} />
           )}
-          {/* ground: an invisible plane that only receives the cast
-              shadow — light mode only, dark mode floats the piece in the
-              void */}
+          {/* ground: an invisible plane that only receives the hard cast
+              shadow — always at the same height, light mode only; dark
+              mode floats the piece in the void. No soft contact blob. */}
           {!dark && (
-            <>
-              <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-                <planeGeometry args={[60, 60]} />
-                <shadowMaterial
-                  transparent
-                  opacity={engine === "vessel" ? 0.34 : softbox ? 0.16 : 0.22}
-                />
-              </mesh>
-              {(engine === "holder" || engine === "totem") && (
-                <ContactShadows
-                  key={shadowKey}
-                  position={[0, 0.001, 0]}
-                  opacity={0.28}
-                  scale={9}
-                  blur={2.2}
-                  far={2.6}
-                  resolution={
-                    engine === "totem" ? (mobile ? 512 : 1024) : mobile ? 256 : 512
-                  }
-                  frames={50}
-                  color="#000000"
-                />
-              )}
-            </>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              <planeGeometry args={[60, 60]} />
+              <shadowMaterial transparent opacity={0.22} />
+            </mesh>
           )}
         </group>
-        {/* local softbox studio — no remote HDR fetch */}
-        {softbox && (
-          <Environment resolution={256} environmentIntensity={1}>
-            <color attach="background" args={["#9a9a9a"]} />
-            <Lightformer
-              form="rect"
-              intensity={3}
-              position={[0, 6, 1]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              scale={[9, 7, 1]}
-            />
-            <Lightformer
-              form="rect"
-              intensity={1.6}
-              position={[-6, 2, 3]}
-              rotation={[0, Math.PI / 2.4, 0]}
-              scale={[5, 3.2, 1]}
-            />
-            <Lightformer
-              form="rect"
-              intensity={1.1}
-              position={[6, 1.4, -2.5]}
-              rotation={[0, -Math.PI / 2.2, 0]}
-              scale={[5, 2.6, 1]}
-            />
-            <Lightformer
-              form="rect"
-              intensity={0.7}
-              position={[0, 1, 6]}
-              rotation={[0, Math.PI, 0]}
-              scale={[7, 1.8, 1]}
-            />
-          </Environment>
-        )}
       </Suspense>
 
-      <FitCamera fit={fit} margin={FIT_MARGIN[engine]} />
+      <FitCamera fit={fit} />
       <GestureParams onNudge={onNudge} onLight={onLight} />
       <OrbitControls
         target={[0, 0.35, 0]}

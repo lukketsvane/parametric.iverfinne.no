@@ -29,6 +29,7 @@ export function GestureParams({
   const controls = useThree((s) => s.controls) as {
     enabled: boolean
     target?: THREE.Vector3
+    update?: () => void
   } | null
   const camera = useThree((s) => s.camera)
   const invalidate = useThree((s) => s.invalidate)
@@ -38,6 +39,20 @@ export function GestureParams({
     const pts = new Map<number, { x: number; y: number }>()
     let mode: "none" | "pinch" | "v" | "h" | "light" = "none"
     let last = { cx: 0, cy: 0, d: 0 }
+    // camera pose at first touch — restored when a gesture turns out to
+    // be a parameter or light gesture, so the one-finger rotate that may
+    // fire while the other fingers are still landing never sticks
+    let snap: { pos: THREE.Vector3; target: THREE.Vector3 } | null = null
+
+    const restoreCamera = () => {
+      if (!snap) return
+      camera.position.copy(snap.pos)
+      if (controls?.target) {
+        controls.target.copy(snap.target)
+        controls.update?.()
+      }
+      invalidate()
+    }
 
     const measure = () => {
       const [a, b] = [...pts.values()]
@@ -61,17 +76,26 @@ export function GestureParams({
     const down = (e: PointerEvent) => {
       if (e.pointerType !== "touch") return
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (pts.size === 1) {
+        snap = {
+          pos: camera.position.clone(),
+          target: controls?.target?.clone() ?? new THREE.Vector3(0, 0.35, 0),
+        }
+      }
       if (pts.size === 2 && mode !== "light") {
         mode = "none"
         last = measure()
         if (controls) controls.enabled = false
       }
       if (pts.size === 3) {
-        // a third finger commits the gesture to the light for good
+        // a third finger commits the gesture to the light for good — and
+        // the camera goes back exactly where it was before any finger
+        // landed: light steering must never move the view
         mode = "light"
         const c = centroid()
         last = { cx: c.x, cy: c.y, d: 0 }
         if (controls) controls.enabled = false
+        restoreCamera()
       }
     }
 
@@ -101,6 +125,10 @@ export function GestureParams({
         } else {
           return
         }
+        // a parameter gesture must not keep the stray camera rotate from
+        // the instant before the second finger landed (pinch keeps it —
+        // pinch IS a camera gesture)
+        if (mode !== "pinch") restoreCamera()
       }
       if (mode === "pinch") {
         if (last.d > 0 && c.d > 0) {
@@ -127,6 +155,7 @@ export function GestureParams({
       if (!pts.delete(e.pointerId)) return
       if (pts.size === 0) {
         mode = "none"
+        snap = null
         // hand control back only when the gesture fully ends
         if (controls) controls.enabled = true
       } else if (pts.size < 2 && mode !== "light") {
