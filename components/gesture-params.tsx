@@ -4,20 +4,26 @@ import { useEffect } from "react"
 import * as THREE from "three"
 import { useThree } from "@react-three/fiber"
 
-export type NudgeKey = "height" | "spread"
+export type NudgeAxis = "vertical" | "horizontal"
 
 /**
- * Two-finger gestures on touch devices:
- *  - vertical two-finger scroll  → height
- *  - horizontal two-finger scroll → radius (spread)
+ * Multi-finger gestures on touch devices:
+ *  - vertical two-finger scroll   → onNudge("vertical", px)
+ *  - horizontal two-finger scroll → onNudge("horizontal", px)
  *  - pinch → camera zoom (handled here, since OrbitControls is paused
- *    while two fingers are down)
- * One-finger rotate stays with OrbitControls.
+ *    while two or more fingers are down)
+ *  - three-finger drag → onLight(dx, dy): steer the key light. The camera
+ *    never moves during this — once a third finger lands the gesture is
+ *    light-only until every finger lifts.
+ * One-finger rotate stays with OrbitControls. What the nudge axes mean is
+ * up to the model (lib/model.ts NUDGE_PARAMS).
  */
 export function GestureParams({
   onNudge,
+  onLight,
 }: {
-  onNudge: (key: NudgeKey, deltaPx: number) => void
+  onNudge: (axis: NudgeAxis, deltaPx: number) => void
+  onLight?: (dxPx: number, dyPx: number) => void
 }) {
   const gl = useThree((s) => s.gl)
   const controls = useThree((s) => s.controls) as {
@@ -30,7 +36,7 @@ export function GestureParams({
   useEffect(() => {
     const el = gl.domElement
     const pts = new Map<number, { x: number; y: number }>()
-    let mode: "none" | "pinch" | "v" | "h" = "none"
+    let mode: "none" | "pinch" | "v" | "h" | "light" = "none"
     let last = { cx: 0, cy: 0, d: 0 }
 
     const measure = () => {
@@ -42,12 +48,29 @@ export function GestureParams({
       }
     }
 
+    const centroid = () => {
+      let x = 0
+      let y = 0
+      for (const p of pts.values()) {
+        x += p.x
+        y += p.y
+      }
+      return { x: x / pts.size, y: y / pts.size }
+    }
+
     const down = (e: PointerEvent) => {
       if (e.pointerType !== "touch") return
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY })
-      if (pts.size === 2) {
+      if (pts.size === 2 && mode !== "light") {
         mode = "none"
         last = measure()
+        if (controls) controls.enabled = false
+      }
+      if (pts.size === 3) {
+        // a third finger commits the gesture to the light for good
+        mode = "light"
+        const c = centroid()
+        last = { cx: c.x, cy: c.y, d: 0 }
         if (controls) controls.enabled = false
       }
     }
@@ -55,6 +78,13 @@ export function GestureParams({
     const move = (e: PointerEvent) => {
       if (!pts.has(e.pointerId)) return
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (mode === "light") {
+        if (pts.size < 3) return
+        const c = centroid()
+        onLight?.(c.x - last.cx, c.y - last.cy)
+        last = { cx: c.x, cy: c.y, d: 0 }
+        return
+      }
       if (pts.size !== 2) return
       const c = measure()
       const dx = c.cx - last.cx
@@ -86,19 +116,21 @@ export function GestureParams({
           invalidate()
         }
       } else if (mode === "v") {
-        onNudge("height", -dy)
+        onNudge("vertical", -dy)
       } else {
-        onNudge("spread", dx)
+        onNudge("horizontal", dx)
       }
       last = c
     }
 
     const up = (e: PointerEvent) => {
       if (!pts.delete(e.pointerId)) return
-      if (pts.size < 2) {
+      if (pts.size === 0) {
         mode = "none"
         // hand control back only when the gesture fully ends
-        if (pts.size === 0 && controls) controls.enabled = true
+        if (controls) controls.enabled = true
+      } else if (pts.size < 2 && mode !== "light") {
+        mode = "none"
       }
     }
 
@@ -113,7 +145,7 @@ export function GestureParams({
       window.removeEventListener("pointercancel", up)
       if (controls) controls.enabled = true
     }
-  }, [gl, controls, camera, invalidate, onNudge])
+  }, [gl, controls, camera, invalidate, onNudge, onLight])
 
   return null
 }
